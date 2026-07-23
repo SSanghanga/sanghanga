@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K-Trade Insight — 수출입 × 주가 대시보드</title>
+<style>
+:root{
+  color-scheme: light;
+  --surface-1:#fcfcfb; --page:#f9f9f7;
+  --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
+  --grid:#e1e0d9; --baseline:#c3c2b7; --border:rgba(11,11,11,.10);
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+  --up:#006300; --down:#d03b3b;
+  --chip:#efeeea; --chip-on:#0b0b0b; --chip-on-ink:#ffffff;
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --surface-1:#1a1a19; --page:#0d0d0d;
+  --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+  --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,.10);
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --up:#0ca30c; --down:#e66767;
+  --chip:#262624; --chip-on:#ffffff; --chip-on-ink:#0b0b0b;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --surface-1:#1a1a19; --page:#0d0d0d;
+    --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+    --up:#0ca30c; --down:#e66767;
+    --chip:#262624; --chip-on:#ffffff; --chip-on-ink:#0b0b0b;
+  }
+}
+*{box-sizing:border-box; margin:0}
+body{
+  background:var(--page); color:var(--ink-1);
+  font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+  font-size:14px; line-height:1.55;
+}
+header{
+  position:sticky; top:0; z-index:20; background:var(--page);
+  border-bottom:1px solid var(--border); padding:14px 20px 0;
+}
+.hrow{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+h1{font-size:19px; font-weight:700}
+h1 small{font-size:12px; color:var(--ink-3); font-weight:400; margin-left:8px}
+#themeBtn{
+  margin-left:auto; border:1px solid var(--border); background:var(--surface-1);
+  color:var(--ink-2); border-radius:8px; padding:5px 12px; cursor:pointer; font-size:13px;
+}
+.notice{
+  margin:10px 0 0; padding:7px 12px; border-radius:8px; font-size:12.5px;
+  background:var(--chip); color:var(--ink-2);
+}
+nav{display:flex; gap:4px; margin-top:10px; overflow-x:auto}
+nav button{
+  border:none; background:none; color:var(--ink-2); font-size:14px; font-weight:600;
+  padding:9px 14px 11px; cursor:pointer; border-bottom:2.5px solid transparent; white-space:nowrap;
+}
+nav button.on{color:var(--ink-1); border-bottom-color:var(--s1)}
+main{max-width:1120px; margin:0 auto; padding:20px}
+section.tab{display:none}
+section.tab.on{display:block}
+.cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:16px}
+.card,.panel{
+  background:var(--surface-1); border:1px solid var(--border); border-radius:12px; padding:16px;
+}
+.panel{margin-bottom:16px}
+.card .k{font-size:12.5px; color:var(--ink-3)}
+.card .v{font-size:24px; font-weight:700; margin-top:2px}
+.card .d{font-size:12.5px; margin-top:2px}
+.pos{color:var(--up)} .neg{color:var(--down)}
+h2{font-size:16px; margin-bottom:4px}
+.sub{font-size:12.5px; color:var(--ink-3); margin-bottom:12px}
+.chips{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px}
+.chip{
+  border:1px solid var(--border); background:var(--chip); color:var(--ink-2);
+  border-radius:999px; padding:5px 13px; font-size:13px; cursor:pointer;
+}
+.chip.on{background:var(--chip-on); color:var(--chip-on-ink); border-color:var(--chip-on)}
+.legend{display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--ink-2); margin-bottom:8px}
+.legend i{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px}
+.chartbox{position:relative}
+.chartbox svg{width:100%; height:auto; display:block}
+#tip{
+  position:fixed; z-index:50; pointer-events:none; display:none;
+  background:var(--surface-1); border:1px solid var(--border); border-radius:8px;
+  padding:8px 11px; font-size:12.5px; box-shadow:0 4px 16px rgba(0,0,0,.14); color:var(--ink-1);
+  min-width:130px;
+}
+#tip .t{color:var(--ink-3); margin-bottom:3px}
+#tip .r{display:flex; justify-content:space-between; gap:14px}
+#tip .r b{font-variant-numeric:tabular-nums}
+table{width:100%; border-collapse:collapse; font-size:13.5px}
+th{
+  text-align:left; color:var(--ink-3); font-size:12px; font-weight:600;
+  padding:8px 10px; border-bottom:1px solid var(--grid); white-space:nowrap;
+}
+th.num,td.num{text-align:right; font-variant-numeric:tabular-nums}
+th.sortable{cursor:pointer; user-select:none}
+th.sortable:hover{color:var(--ink-1)}
+td{padding:9px 10px; border-bottom:1px solid var(--grid)}
+tr.rowlink{cursor:pointer}
+tr.rowlink:hover td{background:var(--chip)}
+tr.bandrow td{background:var(--chip); font-weight:700; color:var(--ink-1); font-size:13px; padding:9px 10px; border-bottom:1px solid var(--grid)}
+.tblwrap{overflow-x:auto}
+.cbar{display:flex; align-items:center; gap:10px; margin:5px 0; font-size:13px}
+.cbar .nm{width:120px; flex-shrink:0; color:var(--ink-2)}
+.cbar .track{flex:1; background:var(--chip); border-radius:5px; height:16px; overflow:hidden}
+.cbar .fill{height:100%; background:var(--s1); border-radius:5px}
+.cbar .val{width:150px; flex-shrink:0; text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-1)}
+.chgtbl{font-size:13px} .chgtbl td{padding:7px 8px}
+.chgtbl tr{cursor:pointer} .chgtbl tr:hover td{background:var(--surface-1)}
+.chgtbl .rk{color:var(--ink-3); width:22px} .chgtbl .amt{text-align:right; color:var(--ink-2); font-variant-numeric:tabular-nums}
+.chgtbl .chg{text-align:right; font-weight:700; font-variant-numeric:tabular-nums; width:78px}
+@media(max-width:640px){.cbar .nm{width:78px}.cbar .val{width:110px; font-size:12px}}
+.selrow{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px}
+select,input[type=number]{
+  background:var(--surface-1); color:var(--ink-1); border:1px solid var(--border);
+  border-radius:8px; padding:6px 10px; font-size:13.5px; font-family:inherit;
+}
+input[type=number]{width:90px}
+label.f{font-size:12.5px; color:var(--ink-2)}
+.big{font-size:34px; font-weight:700}
+.verdict{border-left:3px solid var(--s1); padding:8px 14px; margin-top:12px; font-size:13.5px; color:var(--ink-2)}
+.detail{background:var(--chip); border-radius:10px; padding:14px 16px; }
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+footer{max-width:1120px; margin:0 auto; padding:6px 20px 40px; color:var(--ink-3); font-size:12px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <h1>K-Trade Insight<small>대한민국 수출입 × 주식 대시보드</small></h1>
+    <button id="themeBtn">🌓 테마</button>
+  </div>
+  <div class="notice" id="banner">⚠ 프로토타입 — 현재 모든 수치(수출입·주가·실적)는 <b>데모용 샘플 데이터</b>입니다. update.ps1 실행 후 실데이터로 전환됩니다.</div>
+  <nav>
+    <button data-tab="trade" class="on">📦 수출입 대시보드</button>
+    <button data-tab="stocks">🏢 관련 종목</button>
+    <button data-tab="corr">🔗 수출입-주가 연동성</button>
+    <button data-tab="change">📊 수출 증감 순위</button>
+    <button data-tab="screener">🚀 실적 급증 스크리너</button>
+  </nav>
+</header>
+
+<main>
+
+<!-- ══════════ 탭 1 · 수출입 대시보드 ══════════ -->
+<section class="tab on" id="tab-trade">
+  <div class="cards" id="tradeCards"></div>
+
+  <div class="panel">
+    <h2>품목별 월간 수출 추이</h2>
+    <div class="sub">단위: 억 달러 · HS코드 기반 세분류 품목 · 마우스를 올리면 상세값이 표시됩니다</div>
+    <div class="chips" id="sectorChips"></div>
+    <div class="chartbox" id="tradeChart"></div>
+    <div id="tradeUnitBox" class="sub" style="margin-top:8px"></div>
+  </div>
+
+  <div class="panel" id="ctryPanel">
+    <h2 id="ctryTitle">주요 수출 대상국</h2>
+    <div class="sub" id="ctrySub">관세청 데이터의 국가별 분해입니다 (최근 연도 누적)</div>
+    <div id="ctryList"></div>
+  </div>
+
+  <div class="panel">
+    <h2 id="relTitle">관련 상장사 (본사·공장 소재지)</h2>
+    <div class="sub">채널의 지역↔회사 연결에 대응합니다 — 각 종목의 본사/공장 위치를 함께 표시</div>
+    <div class="tblwrap"><table id="relTable">
+      <thead><tr><th>종목명</th><th>코드</th><th>시장</th><th>본사·공장 소재지</th><th class="num">현재가(원)</th><th class="num">1년 수익률</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </div>
+
+  <div class="panel">
+    <h2 id="yoyTitle">연도별 월간 수출 비교</h2>
+    <div class="sub">같은 달을 연도별로 비교합니다 — 작년·재작년 대비 흐름을 한눈에</div>
+    <div class="legend"><span><i style="background:var(--s3)"></i>2024</span><span><i style="background:var(--s4)"></i>2025</span><span><i style="background:var(--s1)"></i>2026</span></div>
+    <div class="chartbox" id="yoyChart"></div>
+  </div>
+
+  <div class="panel">
+    <h2 id="secSumTitle">전체 섹터 요약</h2>
+    <div class="sub">대분류별로 묶여 있습니다 · 행을 클릭하면 위 차트가 해당 품목으로 전환됩니다</div>
+    <div class="tblwrap"><table id="sectorTable">
+      <thead><tr><th>품목</th><th class="num">금액(원화)</th><th class="num">YoY(작년比)</th><th class="num">재작년比</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ══════════ 탭 2 · 관련 종목 ══════════ -->
+<section class="tab" id="tab-stocks">
+  <div class="panel">
+    <h2>수출 품목별 관련 상장사</h2>
+    <div class="sub">품목(세분류)과 종목을 직접 연결했습니다 · 본사 위치·현재가·수익률·품목 수출 YoY · 행 클릭 → 연동성 분석으로 이동</div>
+    <div class="chips" id="stockChips"></div>
+    <div class="tblwrap"><table id="stockTable">
+      <thead><tr><th>종목명</th><th>코드</th><th>시장</th><th>본사 위치</th><th class="num">현재가(원)</th><th class="num">1개월</th><th class="num">1년 수익률</th><th class="num">품목 수출 YoY</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ══════════ 탭 3 · 연동성 분석 ══════════ -->
+<section class="tab" id="tab-corr">
+  <div class="panel">
+    <h2>수출 지표와 주가, 나란히 보기</h2>
+    <div class="sub">품목 수출액(아래)과 종목 주가(위)를 각자의 축으로 나란히 놓고 흐름을 비교합니다</div>
+    <div class="selrow">
+      <label class="f">품목 <select id="corrSector"></select></label>
+      <label class="f">종목 <select id="corrStock"></select></label>
+      <label class="f">기간
+        <select id="corrRange">
+          <option value="12">최근 12개월</option>
+          <option value="24" selected>최근 24개월</option>
+          <option value="36">최근 36개월</option>
+        </select>
+      </label>
+    </div>
+    <div class="sub" id="corrTopLabel" style="margin:6px 0 2px;font-weight:600;color:var(--ink-2)"></div>
+    <div class="chartbox" id="corrChartPx"></div>
+    <div class="sub" id="corrBotLabel" style="margin:14px 0 2px;font-weight:600;color:var(--ink-2)"></div>
+    <div class="chartbox" id="corrChartEx"></div>
+    <div class="detail" style="margin-top:16px">
+      <div style="font-size:12.5px;color:var(--ink-3);margin-bottom:8px">기간 요약</div>
+      <table id="corrSummary"><tbody></tbody></table>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 탭 · 수출 증감 순위 ══════════ -->
+<section class="tab" id="tab-change">
+  <div class="panel">
+    <h2 id="changeTitle">수출 증감 순위</h2>
+    <div class="sub" id="changeSub">최근 3개월 합계 기준 · 품목을 클릭하면 수출입-주가 연동성 탭으로 이동합니다</div>
+    <div class="grid2">
+      <div class="detail"><h2 style="font-size:14px;margin-bottom:8px">📈 전분기 대비 상승</h2><div class="tblwrap"><table class="chgtbl" id="chgQoQup"><tbody></tbody></table></div></div>
+      <div class="detail"><h2 style="font-size:14px;margin-bottom:8px">📉 전분기 대비 하락</h2><div class="tblwrap"><table class="chgtbl" id="chgQoQdn"><tbody></tbody></table></div></div>
+      <div class="detail"><h2 style="font-size:14px;margin-bottom:8px">🚀 전년 대비 상승</h2><div class="tblwrap"><table class="chgtbl" id="chgYoYup"><tbody></tbody></table></div></div>
+      <div class="detail"><h2 style="font-size:14px;margin-bottom:8px">🔻 전년 대비 하락</h2><div class="tblwrap"><table class="chgtbl" id="chgYoYdn"><tbody></tbody></table></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 탭 4 · 스크리너 ══════════ -->
+<section class="tab" id="tab-screener">
+  <div class="panel">
+    <h2>분기 실적 급증 스크리너</h2>
+    <div class="sub" id="scrSub">최근 분기 실적이 전년 동기 대비 급증한 종목을 걸러냅니다 · 헤더 클릭으로 정렬 · 행 클릭 시 상세 표시</div>
+    <div class="selrow">
+      <label class="f">매출 YoY ≥ <input type="number" id="fRev" value="100" step="50"> %</label>
+      <label class="f">영업이익 YoY <input type="number" id="fOpMin" placeholder="제한없음" step="50"> ~ <input type="number" id="fOpMax" placeholder="제한없음" step="50"> %</label>
+      <button class="chip" id="fReset">조건 해제 (전체 보기)</button>
+      <span class="f" id="fCount" style="color:var(--ink-3)"></span>
+    </div>
+    <div class="tblwrap"><table id="scrTable">
+      <thead><tr>
+        <th>종목명</th><th>시장</th><th>업종</th><th>본사</th>
+        <th class="num sortable" data-k="rev">매출(억원) ⇅</th>
+        <th class="num sortable" data-k="revYoY">매출 YoY ⇅</th>
+        <th class="num sortable" data-k="op">영업이익 ⇅</th>
+        <th class="num sortable" data-k="opYoY">영업이익 YoY ⇅</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div id="scrDetail" style="display:none; margin-top:16px" class="detail">
+      <h2 id="scrDetName" style="margin-bottom:2px"></h2>
+      <div class="sub" id="scrDetSub"></div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>매출(억원)</span><span><i style="background:var(--s2)"></i>영업이익(억원)</span></div>
+      <div class="chartbox" id="scrDetChart"></div>
+    </div>
+  </div>
+</section>
+
+</main>
+<footer>K-Trade Insight 프로토타입 · 데이터 출처(실서비스 예정): 관세청 수출입무역통계 · KRX 정보데이터시스템 · DART 전자공시</footer>
+<div id="tip"></div>
+
+<script>document.write('<script src="data.js?_=' + Date.now() + '"><\/script>');</script>
+<script>
+"use strict";
+/* ───────────────────────── 유틸 ───────────────────────── */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const fmt=(n,d=1)=>n==null?"—":n.toLocaleString("ko-KR",{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmt0=n=>n==null?"—":Math.round(n).toLocaleString("ko-KR");
+const pct=(n,sign=true)=>n==null?"—":(sign&&n>0?"+":"")+fmt(n,1)+"%";
+const cls=n=>n==null?"":(n>=0?"pos":"neg");
+const ratio=(a,b)=>(a!=null&&b!=null&&b!==0)?(a/b-1)*100:null;
+// UTF-8이 잘못 디코딩된 한글 자동 복구 (관세청 API 응답 대비)
+const fixEnc=s=>{if(typeof s!=="string"||!/[-ÿ]/.test(s))return s;try{const f=decodeURIComponent(escape(s));return /[가-힣]/.test(f)?f:s;}catch(e){return s;}};
+// 원화(백만원 저장값) 표시
+const krwM=v=>v==null?"—":fmt0(v)+" 백만원";
+// 큰 금액 압축 표기 (백만원 → 조/억원)
+const krwBig=v=>{if(v==null)return"—";const won=v*1e6;
+  if(Math.abs(won)>=1e12)return fmt(won/1e12,2)+"조원";
+  if(Math.abs(won)>=1e8)return fmt0(won/1e8)+"억원";
+  return fmt0(v)+"백만원";};
+// 수출단가: ex(백만원)·wgt(kg) → 원/kg, 적응형 단위
+const unitPrice=(exM,wgt)=>{if(exM==null||wgt==null||wgt<=0)return null;return exM*1e6/wgt;};
+const unitFmt=u=>{if(u==null)return"—";
+  if(u>=1e8)return fmt(u/1e8,2)+"억원/kg";
+  if(u>=1e4)return fmt(u/1e4,1)+"만원/kg";
+  return fmt0(u)+"원/kg";};
+function pearson(x,y){
+  const n=x.length, mx=x.reduce((a,b)=>a+b,0)/n, my=y.reduce((a,b)=>a+b,0)/n;
+  let num=0,dx=0,dy=0;
+  for(let i=0;i<n;i++){const a=x[i]-mx,b=y[i]-my;num+=a*b;dx+=a*a;dy+=b*b}
+  return num/Math.sqrt(dx*dy||1);
+}
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* ───────────────────────── 데이터 로드: data.js(실데이터) → 없으면 샘플 생성 ───────────────────────── */
+const LIVE=window.KTRADE_DATA||{};
+const liveTrade=!!(LIVE.sectors&&LIVE.sectors.length);
+const liveStocks=!!(LIVE.companies&&LIVE.companies.length);
+const liveScreen=!!(LIVE.screener&&LIVE.screener.rows&&LIVE.screener.rows.length);
+
+// 월 배열
+let MONTHS;
+if(LIVE.months&&LIVE.months.length){MONTHS=LIVE.months}
+else{
+  MONTHS=[];
+  for(let y=2023;y<=2026;y++)for(let m=1;m<=12;m++){
+    if(y===2026&&m>6)break;
+    MONTHS.push({y,m,label:String(y).slice(2)+"."+String(m).padStart(2,"0")});
+  }
+}
+const N=MONTHS.length;
+function yoyArr(arr){return arr.map((v,i)=>i>=12?ratio(v,arr[i-12]):null)}
+
+// 품목(HS코드 세분류): base(월 수출, 억$), 연도별 성장배수, 계절성 — 샘플 생성용
+const SECTOR_DEFS=[
+ {id:"dram",name:"메모리반도체",group:"반도체",base:55,g:{2023:1,2024:1.4,2025:1.65,2026:1.85},sea:.06},
+ {id:"sysic",name:"시스템반도체",group:"반도체",base:30,g:{2023:1,2024:1.15,2025:1.3,2026:1.4},sea:.05},
+ {id:"semieq",name:"반도체 장비",group:"반도체",base:9,g:{2023:1,2024:1.2,2025:1.35,2026:1.5},sea:.08},
+ {id:"car",name:"승용차",group:"자동차",base:42,g:{2023:1,2024:1.08,2025:1.1,2026:1.13},sea:.05},
+ {id:"carparts",name:"자동차부품",group:"자동차",base:19,g:{2023:1,2024:1.03,2025:1.05,2026:1.08},sea:.04},
+ {id:"tire",name:"타이어",group:"자동차",base:6,g:{2023:1,2024:1.05,2025:1.08,2026:1.1},sea:.04},
+ {id:"hrsteel",name:"열연강판",group:"철강",base:8,g:{2023:1,2024:.95,2025:.92,2026:.95},sea:.04},
+ {id:"crsteel",name:"냉연강판",group:"철강",base:6,g:{2023:1,2024:.97,2025:.95,2026:.97},sea:.04},
+ {id:"rebar",name:"철근·봉형강",group:"철강",base:3,g:{2023:1,2024:.9,2025:.88,2026:.9},sea:.05},
+ {id:"battery",name:"리튬이온배터리",group:"2차전지",base:7,g:{2023:1,2024:.85,2025:1.0,2026:1.25},sea:.05},
+ {id:"cathode",name:"양극재",group:"2차전지",base:6,g:{2023:1,2024:.7,2025:.9,2026:1.1},sea:.05},
+ {id:"basiccos",name:"기초화장품",group:"화장품",base:5,g:{2023:1,2024:1.25,2025:1.5,2026:1.7},sea:.06},
+ {id:"colorcos",name:"색조화장품",group:"화장품",base:1.5,g:{2023:1,2024:1.3,2025:1.6,2026:1.9},sea:.07},
+ {id:"ship",name:"선박",group:"조선",base:19,g:{2023:1,2024:1.18,2025:1.42,2026:1.55},sea:.14},
+ {id:"biopharm",name:"바이오의약품",group:"바이오",base:8,g:{2023:1,2024:1.2,2025:1.45,2026:1.6},sea:.05},
+ {id:"pharma",name:"완제의약품",group:"바이오",base:4,g:{2023:1,2024:1.15,2025:1.3,2026:1.45},sea:.05},
+ {id:"display",name:"디스플레이",group:"디스플레이",base:15,g:{2023:1,2024:1.05,2025:1.02,2026:1.06},sea:.1},
+ {id:"power",name:"변압기·전력기기",group:"전력기기",base:5,g:{2023:1,2024:1.35,2025:1.7,2026:2.0},sea:.05},
+ {id:"oilprod",name:"석유제품",group:"석유화학",base:44,g:{2023:1,2024:.97,2025:.92,2026:.95},sea:.04},
+ {id:"ramen",name:"라면",group:"음식료",base:1,g:{2023:1,2024:1.3,2025:1.55,2026:1.8},sea:.04},
+ {id:"conmach",name:"건설기계",group:"기계",base:6,g:{2023:1,2024:1.02,2025:1.0,2026:1.05},sea:.05},
+];
+let SECTORS;
+if(liveTrade){SECTORS=LIVE.sectors.map(s=>({id:s.id,name:s.name,group:s.group||"기타",dir:s.dir||"ex",ex:s.ex,wgt:s.wgt||null,countries:s.countries||[]}))}
+else{
+  const rnd=mulberry32(20260722);
+  SECTORS=SECTOR_DEFS.map(s=>{
+    const ex=[],wgt=[];
+    MONTHS.forEach(mo=>{
+      const gCur=s.g[mo.y]||1, gNext=s.g[mo.y+1]||gCur;
+      const trend=gCur*(1+((mo.m-1)/12)*(gNext/gCur-1));
+      const season=1+s.sea*Math.sin((mo.m-3)/12*2*Math.PI);
+      const v=s.base*trend*season*(1+(rnd()-.5)*.09);
+      ex.push(v*138000); wgt.push(Math.round(v*1e5));  // 샘플: 백만원 스케일 근사
+    });
+    return {id:s.id,name:s.name,group:s.group,dir:"ex",ex,wgt,countries:[]};
+  });
+}
+SECTORS.forEach(s=>{s.yoy=yoyArr(s.ex)});
+
+// 관련 종목 (샘플 생성용 정의 — 실데이터가 있으면 data.js의 값 사용) · items = 연결된 품목 id
+const COMPANY_DEFS=[
+ {items:["dram","sysic"],name:"삼성전자",code:"005930",mkt:"코스피",hq:"경기 수원시",p0:79000,beta:.9},
+ {items:["dram"],name:"SK하이닉스",code:"000660",mkt:"코스피",hq:"경기 이천시",p0:180000,beta:1.3},
+ {items:["sysic"],name:"DB하이텍",code:"000990",mkt:"코스피",hq:"경기 부천시",p0:42000,beta:.5},
+ {items:["semieq"],name:"한미반도체",code:"042700",mkt:"코스피",hq:"인천 서구",p0:95000,beta:1.6},
+ {items:["semieq"],name:"주성엔지니어링",code:"036930",mkt:"코스닥",hq:"경기 광주시",p0:30000,beta:1.3},
+ {items:["car"],name:"현대차",code:"005380",mkt:"코스피",hq:"서울 서초구",p0:240000,beta:.8},
+ {items:["car"],name:"기아",code:"000270",mkt:"코스피",hq:"서울 서초구",p0:115000,beta:.9},
+ {items:["carparts"],name:"현대모비스",code:"012330",mkt:"코스피",hq:"서울 강남구",p0:230000,beta:.5},
+ {items:["carparts"],name:"HL만도",code:"204320",mkt:"코스피",hq:"경기 성남시",p0:38000,beta:.4},
+ {items:["tire"],name:"한국타이어앤테크놀로지",code:"161390",mkt:"코스피",hq:"경기 성남시",p0:48000,beta:.5},
+ {items:["hrsteel","crsteel"],name:"POSCO홀딩스",code:"005490",mkt:"코스피",hq:"경북 포항시",p0:330000,beta:.8},
+ {items:["hrsteel","rebar"],name:"현대제철",code:"004020",mkt:"코스피",hq:"인천 동구",p0:30000,beta:.7},
+ {items:["rebar"],name:"동국제강",code:"460860",mkt:"코스피",hq:"서울 중구",p0:9500,beta:.5},
+ {items:["battery"],name:"LG에너지솔루션",code:"373220",mkt:"코스피",hq:"서울 영등포구",p0:380000,beta:1.0},
+ {items:["battery"],name:"삼성SDI",code:"006400",mkt:"코스피",hq:"경기 용인시",p0:290000,beta:.9},
+ {items:["cathode"],name:"에코프로비엠",code:"247540",mkt:"코스닥",hq:"충북 청주시",p0:150000,beta:1.5},
+ {items:["cathode"],name:"포스코퓨처엠",code:"003670",mkt:"코스피",hq:"경북 포항시",p0:170000,beta:1.2},
+ {items:["basiccos"],name:"아모레퍼시픽",code:"090430",mkt:"코스피",hq:"서울 용산구",p0:130000,beta:1.0},
+ {items:["basiccos"],name:"LG생활건강",code:"051900",mkt:"코스피",hq:"서울 종로구",p0:330000,beta:.7},
+ {items:["basiccos","colorcos"],name:"코스맥스",code:"192820",mkt:"코스피",hq:"경기 성남시",p0:150000,beta:1.4},
+ {items:["colorcos"],name:"클리오",code:"237880",mkt:"코스닥",hq:"서울 강남구",p0:32000,beta:1.2},
+ {items:["ship"],name:"HD한국조선해양",code:"009540",mkt:"코스피",hq:"경기 성남시",p0:200000,beta:1.2},
+ {items:["ship"],name:"한화오션",code:"042660",mkt:"코스피",hq:"경남 거제시",p0:60000,beta:1.4},
+ {items:["ship"],name:"삼성중공업",code:"010140",mkt:"코스피",hq:"경남 거제시",p0:14000,beta:1.1},
+ {items:["biopharm"],name:"삼성바이오로직스",code:"207940",mkt:"코스피",hq:"인천 연수구",p0:1050000,beta:.8},
+ {items:["biopharm"],name:"셀트리온",code:"068270",mkt:"코스피",hq:"인천 연수구",p0:185000,beta:.9},
+ {items:["pharma"],name:"유한양행",code:"000100",mkt:"코스피",hq:"서울 동작구",p0:120000,beta:.5},
+ {items:["pharma"],name:"한미약품",code:"128940",mkt:"코스피",hq:"서울 송파구",p0:300000,beta:.7},
+ {items:["display"],name:"LG디스플레이",code:"034220",mkt:"코스피",hq:"경기 파주시",p0:11500,beta:.9},
+ {items:["display"],name:"덕산네오룩스",code:"213420",mkt:"코스닥",hq:"충남 천안시",p0:34000,beta:1.1},
+ {items:["power"],name:"HD현대일렉트릭",code:"267260",mkt:"코스피",hq:"울산 동구",p0:300000,beta:1.6},
+ {items:["power"],name:"효성중공업",code:"298040",mkt:"코스피",hq:"서울 마포구",p0:400000,beta:1.5},
+ {items:["power"],name:"LS ELECTRIC",code:"010120",mkt:"코스피",hq:"경기 안양시",p0:180000,beta:1.2},
+ {items:["power"],name:"두산에너빌리티",code:"034020",mkt:"코스피",hq:"경남 창원시",p0:22000,beta:1.0},
+ {items:["oilprod"],name:"S-Oil",code:"010950",mkt:"코스피",hq:"서울 마포구",p0:68000,beta:.7},
+ {items:["oilprod"],name:"SK이노베이션",code:"096770",mkt:"코스피",hq:"서울 종로구",p0:110000,beta:.5},
+ {items:["ramen"],name:"삼양식품",code:"003230",mkt:"코스피",hq:"서울 성북구",p0:700000,beta:1.3},
+ {items:["ramen"],name:"농심",code:"004370",mkt:"코스피",hq:"서울 동작구",p0:400000,beta:.5},
+ {items:["conmach"],name:"HD현대인프라코어",code:"042670",mkt:"코스피",hq:"인천 동구",p0:8200,beta:.8},
+];
+let COMPANIES;
+if(liveStocks){COMPANIES=LIVE.companies}
+else{
+  let seed=7;
+  COMPANIES=COMPANY_DEFS.map(c=>{
+    const rnd=mulberry32(seed++*991);
+    const sec=SECTORS.find(s=>c.items.includes(s.id))||SECTORS[0];
+    const px=[c.p0];
+    for(let i=1;i<N;i++){
+      const yoy=sec.yoy[i]??0;
+      px.push(px[i-1]*(1+0.002+c.beta*0.0028*yoy+(rnd()-.5)*0.085));
+    }
+    return {...c,px,last:px[N-1],m1:ratio(px[N-1],px[N-2]),y1:N>=13?ratio(px[N-1],px[N-13]):null};
+  });
+}
+// 구버전 data.js 호환: sector 필드만 있으면 items 배열로 변환
+COMPANIES.forEach(c=>{if(!c.items)c.items=c.sector?[c.sector]:[]});
+
+// 스크리너: 가상 종목 (샘플 데모용 — 실데이터가 있으면 DART 전수 스캔 결과 사용)
+const SCREEN_DEFS=[
+ {name:"한빛방산테크",mkt:"코스닥",ind:"방산·유도무기",hq:"대전 유성구",rev:1840,revYoY:412,op:310,opYoY:186},
+ {name:"코어HBM텍",mkt:"코스닥",ind:"반도체 장비",hq:"경기 화성시",rev:960,revYoY:388,op:205,opYoY:264},
+ {name:"오션윈드파워",mkt:"코스피",ind:"해상풍력 기자재",hq:"전남 목포시",rev:2210,revYoY:342,op:198,opYoY:151},
+ {name:"네오파워시스템",mkt:"코스피",ind:"전력기기",hq:"경남 창원시",rev:3150,revYoY:315,op:520,opYoY:298},
+ {name:"글로우코스",mkt:"코스닥",ind:"화장품 ODM",hq:"충북 청주시",rev:780,revYoY:305,op:96,opYoY:122},
+ {name:"블루오션마린",mkt:"코스닥",ind:"조선 기자재",hq:"부산 강서구",rev:640,revYoY:298,op:74,opYoY:210},
+ {name:"퀀텀센서",mkt:"코스닥",ind:"센서·계측",hq:"대구 달서구",rev:410,revYoY:520,op:88,opYoY:455},
+ {name:"스마트그리드에너지",mkt:"코스닥",ind:"ESS·전력IT",hq:"경기 판교",rev:530,revYoY:365,op:41,opYoY:88},
+ {name:"바이오제닉스",mkt:"코스닥",ind:"바이오시밀러",hq:"인천 송도",rev:1120,revYoY:452,op:230,opYoY:275},
+ {name:"에어로스페이스K",mkt:"코스피",ind:"항공우주 부품",hq:"경남 사천시",rev:890,revYoY:238,op:112,opYoY:190},
+ {name:"실리콘포토닉스",mkt:"코스닥",ind:"광통신 소자",hq:"경기 수원시",rev:350,revYoY:610,op:64,opYoY:240},
+ {name:"케이뷰티랩",mkt:"코스닥",ind:"화장품 브랜드",hq:"서울 강남구",rev:460,revYoY:185,op:70,opYoY:145},
+ {name:"로보틱스원",mkt:"코스닥",ind:"산업용 로봇",hq:"경기 안산시",rev:290,revYoY:330,op:12,opYoY:35},
+ {name:"그린수소홀딩스",mkt:"코스피",ind:"수소 인프라",hq:"울산 남구",rev:1560,revYoY:96,op:130,opYoY:118},
+ {name:"디지털헬스원",mkt:"코스닥",ind:"의료AI",hq:"서울 성동구",rev:180,revYoY:410,op:22,opYoY:640},
+ {name:"메가푸드테크",mkt:"코스닥",ind:"식품 수출",hq:"전북 익산시",rev:720,revYoY:142,op:85,opYoY:160},
+];
+let SCREEN, SCREEN_LABEL="2026년 1분기 (샘플)";
+if(liveScreen){
+  SCREEN_LABEL=LIVE.screener.quarter;
+  SCREEN=LIVE.screener.rows.map(c=>({
+    name:c.name,code:c.code,mkt:c.mkt||"—",ind:c.ind||"—",hq:c.hq||"—",
+    rev:c.rev,revYoY:c.revYoY,op:c.op,opYoY:c.opYoY,opPrev:c.opP,
+    qs:["전년 동기","최근 분기"],qRev:[c.revP,c.rev],qOp:[c.opP==null?0:c.opP,c.op==null?0:c.op]
+  }));
+}else{
+  SCREEN=SCREEN_DEFS;
+  let seed=101;
+  for(const c of SCREEN){
+    const rnd=mulberry32(seed++*577);
+    const q0r=c.rev/(1+c.revYoY/100), q0o=c.op/(1+c.opYoY/100);
+    c.qs=["25.1Q","25.2Q","25.3Q","25.4Q","26.1Q"];
+    c.qRev=[];c.qOp=[];
+    for(let i=0;i<5;i++){
+      const t=i/4;
+      c.qRev.push(q0r*Math.pow(c.rev/q0r,t)*(1+(rnd()-.5)*.12));
+      c.qOp.push(q0o*Math.pow(Math.max(c.op,1)/Math.max(q0o,1),t)*(1+(rnd()-.5)*.18));
+    }
+    c.qRev[0]=q0r; c.qRev[4]=c.rev; c.qOp[0]=q0o; c.qOp[4]=c.op;
+  }
+}
+
+// 상단 배너: 실데이터 연결 상태 표시
+if(LIVE.updated){
+  const liveNat=!!(LIVE.national&&LIVE.national.ex&&LIVE.national.ex.length);
+  const p=[
+    `수출입 ${liveTrade?"실데이터✓":(liveNat?"전체 실데이터✓·섹터별 샘플":"샘플")}`,
+    `주가 ${liveStocks?"실데이터✓":"샘플"}`,
+    `분기실적 ${liveScreen?"실데이터✓":"샘플"}`
+  ];
+  document.getElementById("banner").innerHTML=
+    `📡 마지막 업데이트: <b>${LIVE.updated}</b> · ${p.join(" · ")}`+
+    (liveTrade&&liveStocks&&liveScreen?"":" — 샘플 부분은 해당 API 연결 시 자동 전환됩니다");
+}
+
+/* ───────────────────────── 차트 엔진 (SVG) ───────────────────────── */
+const tip=document.getElementById("tip");
+function showTip(html,ev){tip.innerHTML=html;tip.style.display="block";
+  const w=tip.offsetWidth,h=tip.offsetHeight;
+  let x=ev.clientX+14,y=ev.clientY-h-10;
+  if(x+w>innerWidth-8)x=ev.clientX-w-14;
+  if(y<8)y=ev.clientY+14;
+  tip.style.left=x+"px";tip.style.top=y+"px";
+}
+function hideTip(){tip.style.display="none"}
+
+function lineChart(el,{labels,series,yFmt=v=>fmt(v,0),height=300,xEvery=3}){
+  const W=980,H=height,pl=56,pr=14,pt=12,pb=30;
+  const all=series.flatMap(s=>s.values).filter(v=>v!=null);
+  if(!all.length){el.innerHTML='<div class="sub">표시할 데이터가 없습니다</div>';return}
+  let lo=Math.min(...all),hi=Math.max(...all);
+  const pad=(hi-lo)*.08||1; lo-=pad; hi+=pad;
+  const X=i=>pl+(W-pl-pr)*i/(labels.length-1);
+  const Y=v=>pt+(H-pt-pb)*(1-(v-lo)/(hi-lo));
+  let g="";
+  const ticks=5;
+  for(let t=0;t<=ticks;t++){
+    const v=lo+(hi-lo)*t/ticks, y=Y(v);
+    g+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="1"/>`;
+    g+=`<text x="${pl-8}" y="${y+4}" text-anchor="end" font-size="11" fill="var(--ink-3)">${yFmt(v)}</text>`;
+  }
+  labels.forEach((lb,i)=>{if(i%xEvery===0)g+=`<text x="${X(i)}" y="${H-8}" text-anchor="middle" font-size="11" fill="var(--ink-3)">${lb}</text>`});
+  let paths="";
+  for(const s of series){
+    let d="",on=false;
+    s.values.forEach((v,i)=>{if(v==null){on=false;return} d+=(on?"L":"M")+X(i).toFixed(1)+" "+Y(v).toFixed(1);on=true});
+    paths+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round"/>`;
+  }
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}">${g}${paths}
+    <line id="xh" y1="${pt}" y2="${H-pb}" stroke="var(--baseline)" stroke-width="1" visibility="hidden"/>
+    <g id="dots"></g><rect x="${pl}" y="${pt}" width="${W-pl-pr}" height="${H-pt-pb}" fill="transparent"/></svg>`;
+  const svg=el.querySelector("svg"),xh=svg.querySelector("#xh"),dots=svg.querySelector("#dots");
+  svg.addEventListener("mousemove",ev=>{
+    const r=svg.getBoundingClientRect(), sx=(ev.clientX-r.left)/r.width*W;
+    let i=Math.round((sx-pl)/(W-pl-pr)*(labels.length-1));
+    i=Math.max(0,Math.min(labels.length-1,i));
+    xh.setAttribute("x1",X(i));xh.setAttribute("x2",X(i));xh.setAttribute("visibility","visible");
+    dots.innerHTML=series.map(s=>s.values[i]==null?"":`<circle cx="${X(i)}" cy="${Y(s.values[i])}" r="4.5" fill="${s.color}" stroke="var(--surface-1)" stroke-width="2"/>`).join("");
+    const rows=series.map(s=>s.values[i]==null?"":`<div class="r"><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};margin-right:5px"></i>${s.name}</span><b>${s.fmt?s.fmt(s.values[i]):yFmt(s.values[i])}</b></div>`).join("");
+    showTip(`<div class="t">${labels[i]}</div>${rows}`,ev);
+  });
+  svg.addEventListener("mouseleave",()=>{xh.setAttribute("visibility","hidden");dots.innerHTML="";hideTip()});
+}
+
+function barChart(el,{labels,series,yFmt=v=>fmt(v,0),height=280}){
+  const W=980,H=height,pl=56,pr=14,pt=12,pb=30;
+  const all=series.flatMap(s=>s.values).filter(v=>v!=null);
+  if(!all.length){el.innerHTML='<div class="sub">표시할 데이터가 없습니다</div>';return}
+  const hi=Math.max(...all,0)*1.08, lo=Math.min(...all,0)*1.08;
+  const gw=(W-pl-pr)/labels.length;
+  const bw=Math.min(18,(gw-8)/series.length-2);
+  const Y=v=>pt+(H-pt-pb)*(1-(v-lo)/(hi-lo));
+  let g="";
+  for(let t=0;t<=4;t++){
+    const v=lo+(hi-lo)*t/4,y=Y(v);
+    g+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="var(--grid)"/>`;
+    g+=`<text x="${pl-8}" y="${y+4}" text-anchor="end" font-size="11" fill="var(--ink-3)">${yFmt(v)}</text>`;
+  }
+  let bars="";
+  labels.forEach((lb,i)=>{
+    g+=`<text x="${pl+gw*i+gw/2}" y="${H-8}" text-anchor="middle" font-size="11" fill="var(--ink-3)">${lb}</text>`;
+    series.forEach((s,j)=>{
+      const v=s.values[i]; if(v==null)return;
+      const x=pl+gw*i+gw/2-(series.length*(bw+2)-2)/2+j*(bw+2);
+      const y0=Y(0);
+      const y=Math.min(Y(v),y0), h=Math.abs(Y(v)-y0);
+      bars+=`<rect data-i="${i}" x="${x}" y="${y}" width="${bw}" height="${Math.max(h,1)}" rx="3" fill="${s.color}"/>`;
+    });
+  });
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}">${g}<line x1="${pl}" x2="${W-pr}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--baseline)"/>${bars}</svg>`;
+  const svg=el.querySelector("svg");
+  svg.addEventListener("mousemove",ev=>{
+    const t=ev.target;
+    if(t.tagName!=="rect"){hideTip();return}
+    const i=+t.dataset.i;
+    const rows=series.map(s=>s.values[i]==null?"":`<div class="r"><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};margin-right:5px"></i>${s.name}</span><b>${yFmt(s.values[i])}</b></div>`).join("");
+    showTip(`<div class="t">${labels[i]}</div>${rows}`,ev);
+  });
+  svg.addEventListener("mouseleave",hideTip);
+}
+
+// 콤보: 막대(bar) + 선(line), 이중축. bar=왼쪽축, line=오른쪽축
+function comboChart(el,{labels,bar,line,height=260,xEvery=2}){
+  const W=980,H=height,pl=62,pr=64,pt=14,pb=30;
+  const bv=bar.values.filter(v=>v!=null), lv=line.values.filter(v=>v!=null);
+  if(!bv.length&&!lv.length){el.innerHTML='<div class="sub">표시할 데이터가 없습니다</div>';return}
+  const bHi=Math.max(...bv,0)*1.1||1, bLo=0;
+  let lHi=Math.max(...lv), lLo=Math.min(...lv); const lp=(lHi-lLo)*.15||lHi*.1||1; lHi+=lp; lLo-=lp; if(lLo<0)lLo=0;
+  const gw=(W-pl-pr)/labels.length, bw=Math.min(16,gw-6);
+  const BY=v=>pt+(H-pt-pb)*(1-(v-bLo)/(bHi-bLo));
+  const LY=v=>pt+(H-pt-pb)*(1-(v-lLo)/(lHi-lLo));
+  const X=i=>pl+gw*i+gw/2;
+  let g="";
+  for(let t=0;t<=4;t++){
+    const y=pt+(H-pt-pb)*t/4;
+    g+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="var(--grid)"/>`;
+    g+=`<text x="${pl-8}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--ink-3)">${bar.yFmt(bLo+(bHi-bLo)*(1-t/4))}</text>`;
+    g+=`<text x="${W-pr+8}" y="${y+4}" text-anchor="start" font-size="10" fill="${line.color}">${line.yFmt(lLo+(lHi-lLo)*(1-t/4))}</text>`;
+  }
+  let bars="";
+  labels.forEach((lb,i)=>{
+    if(i%xEvery===0)g+=`<text x="${X(i)}" y="${H-8}" text-anchor="middle" font-size="10" fill="var(--ink-3)">${lb}</text>`;
+    const v=bar.values[i]; if(v!=null){const y=BY(v);bars+=`<rect data-i="${i}" x="${X(i)-bw/2}" y="${y}" width="${bw}" height="${Math.max(H-pb-y,1)}" rx="3" fill="${bar.color}" opacity="0.85"/>`;}
+  });
+  let d="",on=false;
+  line.values.forEach((v,i)=>{if(v==null){on=false;return}d+=(on?"L":"M")+X(i).toFixed(1)+" "+LY(v).toFixed(1);on=true});
+  const path=`<path d="${d}" fill="none" stroke="${line.color}" stroke-width="2.5" stroke-linejoin="round"/>`;
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}">${g}${bars}${path}
+    <line id="xh" y1="${pt}" y2="${H-pb}" stroke="var(--baseline)" visibility="hidden"/><g id="dots"></g>
+    <rect x="${pl}" y="${pt}" width="${W-pl-pr}" height="${H-pt-pb}" fill="transparent"/></svg>`;
+  const svg=el.querySelector("svg"),xh=svg.querySelector("#xh"),dots=svg.querySelector("#dots");
+  svg.addEventListener("mousemove",ev=>{
+    const r=svg.getBoundingClientRect(); let i=Math.round(((ev.clientX-r.left)/r.width*W-pl)/gw-0.5);
+    i=Math.max(0,Math.min(labels.length-1,i));
+    xh.setAttribute("x1",X(i));xh.setAttribute("x2",X(i));xh.setAttribute("visibility","visible");
+    dots.innerHTML=(line.values[i]!=null)?`<circle cx="${X(i)}" cy="${LY(line.values[i])}" r="4.5" fill="${line.color}" stroke="var(--surface-1)" stroke-width="2"/>`:"";
+    const rows=[bar,line].map(s=>s.values[i]==null?"":`<div class="r"><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};margin-right:5px"></i>${s.name}</span><b>${s.yFmt(s.values[i])}</b></div>`).join("");
+    showTip(`<div class="t">${labels[i]}</div>${rows}`,ev);
+  });
+  svg.addEventListener("mouseleave",()=>{xh.setAttribute("visibility","hidden");dots.innerHTML="";hideTip()});
+}
+
+/* ───────────────────────── 탭 전환/테마 ───────────────────────── */
+document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on",x===b));
+  document.querySelectorAll("section.tab").forEach(s=>s.classList.toggle("on",s.id==="tab-"+b.dataset.tab));
+}));
+function gotoTab(id){document.querySelector(`nav button[data-tab="${id}"]`).click()}
+document.getElementById("themeBtn").addEventListener("click",()=>{
+  const r=document.documentElement;
+  const dark=getComputedStyle(document.body).backgroundColor!=="rgb(249, 249, 247)";
+  r.dataset.theme=dark?"light":"dark";
+  renderAll();
+});
+
+/* ───────────────────────── 탭 1 렌더 ───────────────────────── */
+let curSector=null;
+function renderTrade(){
+  const s=SECTORS.find(x=>x.id===curSector)||SECTORS[0];
+  curSector=s.id;
+  const i=N-1;
+  const nat=(LIVE.national&&LIVE.national.ex&&LIVE.national.ex.length===N)?LIVE.national:null;
+  const sum=f=>SECTORS.reduce((a,x)=>a+(f(x)||0),0);
+  const totEx=nat?nat.ex[i]:sum(x=>x.ex[i]);
+  const prevEx=i>=12?(nat?nat.ex[i-12]:sum(x=>x.ex[i-12])):null;
+  const yoy=ratio(totEx,prevEx);
+  let best=null;
+  for(const x of SECTORS){if(x.yoy[i]!=null&&(best==null||x.yoy[i]>best.yoy[i]))best=x}
+  const y2sel=i>=24?ratio(s.ex[i],s.ex[i-24]):null;
+  const isImp=s.dir==="im";
+  const flow=isImp?"수입":"수출";
+  const up=(s.wgt&&s.wgt[i]!=null)?unitPrice(s.ex[i],s.wgt[i]):null;
+  document.getElementById("tradeCards").innerHTML=`
+    <div class="card"><div class="k">${MONTHS[i].label} ${nat?"총수출 (관세청 전체)":"총"+flow+" (품목 합계)"}</div><div class="v">${krwBig(totEx)}</div><div class="d ${cls(yoy)}">${pct(yoy)} YoY</div></div>
+    <div class="card"><div class="k">${s.name} ${flow} 총액</div><div class="v">${krwBig(s.ex[i])}</div><div class="d ${cls(s.yoy[i])}">${pct(s.yoy[i])} YoY</div></div>
+    <div class="card"><div class="k">${s.name} ${flow} 단가</div><div class="v">${unitFmt(up)}</div><div class="d">중량 1kg당 ${flow}가격</div></div>
+    <div class="card"><div class="k">${s.name} 재작년比</div><div class="v ${cls(y2sel)}">${pct(y2sel)}</div></div>`;
+  // 품목 선택 (대분류 그룹 드롭다운)
+  {
+    const groups=[...new Set(SECTORS.map(x=>x.group))];
+    document.getElementById("sectorChips").innerHTML=`<label class="f">품목 선택 <select id="tradeSel">`+
+      groups.map(g=>`<optgroup label="${g}">`+SECTORS.filter(x=>x.group===g).map(x=>`<option value="${x.id}"${x.id===curSector?" selected":""}>${x.name}</option>`).join("")+`</optgroup>`).join("")+
+      `</select></label> <span class="f" style="color:var(--ink-3)">전체 ${SECTORS.length}개 품목 · 아래 요약표 행 클릭으로도 전환됩니다</span>`;
+    document.getElementById("tradeSel").addEventListener("change",e=>{curSector=e.target.value;renderTrade()});
+  }
+  // 라인차트 (수출/수입 단일 시리즈, 백만원)
+  lineChart(document.getElementById("tradeChart"),{
+    labels:MONTHS.map(m=>m.label),
+    series:[{name:s.name+" "+flow,color:css("--s1"),values:s.ex,fmt:v=>krwBig(v)}],
+    yFmt:v=>krwBig(v)
+  });
+  // 수출단가 안내
+  const upBox=document.getElementById("tradeUnitBox");
+  if(up!=null)upBox.innerHTML=`💰 ${MONTHS[i].label} ${s.name} ${flow}단가: <b>${unitFmt(up)}</b> (중량 ${fmt0(s.wgt[i])}kg 기준) · 단가 = ${flow}액 ÷ 중량`;
+  else upBox.textContent="";
+  // 국가별 수출 분해
+  const cp=document.getElementById("ctryPanel"), cl=document.getElementById("ctryList");
+  if(s.countries&&s.countries.length){
+    cp.style.display="";
+    document.getElementById("ctryTitle").textContent=`${s.name} — 주요 ${flow} 대상국`;
+    const mx=Math.max(...s.countries.map(c=>c.krw));
+    const tot=s.countries.reduce((a,c)=>a+c.krw,0);
+    cl.innerHTML=s.countries.map(c=>`<div class="cbar">
+      <span class="nm">${fixEnc(c.name)}</span>
+      <span class="track"><span class="fill" style="width:${(c.krw/mx*100).toFixed(1)}%"></span></span>
+      <span class="val">${krwBig(c.krw)} <span style="color:var(--ink-3)">${(c.krw/tot*100).toFixed(0)}%</span></span></div>`).join("");
+  } else { cp.style.display="none"; }
+  // 관련 상장사 (본사·공장 소재지)
+  renderRelStocks(s);
+  // 연도별 비교 바
+  document.getElementById("yoyTitle").textContent=`연도별 월간 수출 비교 — ${s.name}`;
+  const byYear=y=>Array.from({length:12},(_,m)=>{const idx=MONTHS.findIndex(mo=>mo.y===y&&mo.m===m+1);return idx>=0?s.ex[idx]:null});
+  barChart(document.getElementById("yoyChart"),{
+    labels:Array.from({length:12},(_,m)=>(m+1)+"월"),
+    series:[
+      {name:"2024",color:css("--s3"),values:byYear(2024)},
+      {name:"2025",color:css("--s4"),values:byYear(2025)},
+      {name:"2026",color:css("--s1"),values:byYear(2026)},
+    ],
+    yFmt:v=>fmt(v,0)+"억$"
+  });
+  // 품목 테이블 (대분류 그룹)
+  document.getElementById("secSumTitle").textContent=`품목별 수출 요약 (${MONTHS[i].label} 기준)`;
+  const groups=[...new Set(SECTORS.map(x=>x.group))];
+  let secHtml="";
+  for(const g of groups){
+    secHtml+=`<tr class="bandrow"><td colspan="4">${g}</td></tr>`;
+    for(const x of SECTORS.filter(v=>v.group===g)){
+      const y1=i>=12?ratio(x.ex[i],x.ex[i-12]):null, y2=i>=24?ratio(x.ex[i],x.ex[i-24]):null;
+      const tag=x.dir==="im"?' <span style="color:var(--ink-3);font-size:11px">수입</span>':'';
+      secHtml+=`<tr class="rowlink" data-id="${x.id}">
+        <td><b>${x.name}</b>${tag}</td><td class="num">${krwBig(x.ex[i])}</td>
+        <td class="num ${cls(y1)}">${pct(y1)}</td><td class="num ${cls(y2)}">${pct(y2)}</td></tr>`;
+    }
+  }
+  document.querySelector("#sectorTable tbody").innerHTML=secHtml;
+  document.querySelectorAll("#sectorTable tr.rowlink").forEach(r=>r.addEventListener("click",()=>{curSector=r.dataset.id;renderTrade();scrollTo({top:0,behavior:"smooth"})}));
+}
+
+// 선택 품목의 관련 상장사 (본사·공장 소재지 = 채널의 지역↔회사 연결에 대응)
+function renderRelStocks(s){
+  const list=COMPANIES.filter(c=>(c.items||[]).includes(s.id));
+  const tb=document.querySelector("#relTable tbody");
+  document.getElementById("relTitle").textContent=`${s.name} 관련 상장사 (본사·공장 소재지)`;
+  if(!list.length){tb.innerHTML=`<tr><td colspan="6" style="color:var(--ink-3);text-align:center;padding:18px">연결된 상장사 정보가 없습니다</td></tr>`;return;}
+  tb.innerHTML=list.map(c=>`<tr class="rowlink" data-code="${c.code}">
+    <td><b>${c.name}</b></td><td>${c.code}</td><td>${c.mkt||"—"}</td><td>${c.hq||"—"}</td>
+    <td class="num">${fmt0(c.last)}</td>
+    <td class="num ${cls(c.y1)}">${pct(c.y1)}</td></tr>`).join("");
+  tb.querySelectorAll("tr.rowlink").forEach(r=>r.addEventListener("click",()=>{
+    const c=COMPANIES.find(x=>x.code===r.dataset.code);
+    corrSel.sector.value=s.id; fillCorrStocks(); corrSel.stock.value=c.code; renderCorr(); gotoTab("corr");
+  }));
+}
+
+/* ───────────────────────── 탭 2 렌더 ───────────────────────── */
+let stockFilter="all";
+function renderStocks(){
+  {
+    const groups=[...new Set(SECTORS.map(x=>x.group))];
+    document.getElementById("stockChips").innerHTML=`<label class="f">품목 필터 <select id="stockSel"><option value="all"${stockFilter==="all"?" selected":""}>전체 종목</option>`+
+      groups.map(g=>`<optgroup label="${g}">`+SECTORS.filter(x=>x.group===g).map(x=>`<option value="${x.id}"${x.id===stockFilter?" selected":""}>${x.name}</option>`).join("")+`</optgroup>`).join("")+
+      `</select></label>`;
+    document.getElementById("stockSel").addEventListener("change",e=>{stockFilter=e.target.value;renderStocks()});
+  }
+  const i=N-1;
+  const itemNames=c=>(c.items||[]).map(id=>{const s=SECTORS.find(x=>x.id===id);return s?s.name:id}).join(" · ");
+  const list=COMPANIES.filter(c=>stockFilter==="all"||(c.items||[]).includes(stockFilter));
+  document.querySelector("#stockTable tbody").innerHTML=list.map(c=>{
+    const sid=stockFilter==="all"?(c.items&&c.items[0]):stockFilter;
+    const sec=SECTORS.find(s=>s.id===sid);
+    return `<tr class="rowlink" data-code="${c.code}">
+      <td><b>${c.name}</b> <span style="color:var(--ink-3);font-size:12px">${itemNames(c)}</span></td>
+      <td>${c.code}</td><td>${c.mkt}</td><td>${c.hq}</td>
+      <td class="num">${fmt0(c.last)}</td>
+      <td class="num ${cls(c.m1)}">${pct(c.m1)}</td>
+      <td class="num ${cls(c.y1)}">${pct(c.y1)}</td>
+      <td class="num ${cls(sec?sec.yoy[i]:null)}">${sec?pct(sec.yoy[i]):"—"}</td></tr>`;
+  }).join("");
+  document.querySelectorAll("#stockTable tr.rowlink").forEach(r=>r.addEventListener("click",()=>{
+    const c=COMPANIES.find(x=>x.code===r.dataset.code);
+    const sid=(stockFilter!=="all"&&(c.items||[]).includes(stockFilter))?stockFilter:(c.items&&c.items[0]);
+    if(sid){corrSel.sector.value=sid; fillCorrStocks(); corrSel.stock.value=c.code;}
+    renderCorr(); gotoTab("corr");
+  }));
+}
+
+/* ───────────────────────── 탭 3 렌더 ───────────────────────── */
+const corrSel={
+  sector:document.getElementById("corrSector"),
+  stock:document.getElementById("corrStock"),
+  range:document.getElementById("corrRange"),
+};
+corrSel.sector.innerHTML=(()=>{
+  const groups=[...new Set(SECTORS.map(s=>s.group))];
+  return groups.map(g=>`<optgroup label="${g}">`+SECTORS.filter(s=>s.group===g).map(s=>`<option value="${s.id}">${s.name}</option>`).join("")+`</optgroup>`).join("");
+})();
+function fillCorrStocks(){
+  const list=COMPANIES.filter(c=>(c.items||[]).includes(corrSel.sector.value));
+  corrSel.stock.innerHTML=list.map(c=>`<option value="${c.code}">${c.name}</option>`).join("");
+}
+fillCorrStocks();
+corrSel.sector.addEventListener("change",()=>{fillCorrStocks();renderCorr()});
+corrSel.stock.addEventListener("change",renderCorr);
+corrSel.range.addEventListener("change",renderCorr);
+
+function renderCorr(){
+  const s=SECTORS.find(x=>x.id===corrSel.sector.value)||SECTORS[0];
+  let c=COMPANIES.find(x=>x.code===corrSel.stock.value);
+  if(!c){fillCorrStocks(); c=COMPANIES.find(x=>x.code===corrSel.stock.value)||COMPANIES[0];}
+  const R=+corrSel.range.value, st=Math.max(0,N-R);
+  const lab=MONTHS.slice(st).map(m=>m.label);
+  // 위: 주가 / 아래: 수출 — 각자 자기 축 (2단 분리 패널)
+  document.getElementById("corrTopLabel").textContent=`${c.name} 주가 (원)`;
+  lineChart(document.getElementById("corrChartPx"),{
+    labels:lab,
+    series:[{name:c.name+" 주가",color:css("--s2"),values:c.px.slice(st),fmt:v=>fmt0(v)+"원"}],
+    yFmt:v=>fmt0(v), height:210, xEvery:R>24?3:2
+  });
+  const flowW=s.dir==="im"?"수입":"수출";
+  document.getElementById("corrBotLabel").innerHTML=`${s.name} ${flowW}액(막대) + ${flowW}단가(선) — 각자 축`;
+  const unitArr=s.ex.slice(st).map((v,idx)=>{const g=st+idx;return (s.wgt&&s.wgt[g]!=null)?unitPrice(v,s.wgt[g]):null;});
+  comboChart(document.getElementById("corrChartEx"),{
+    labels:lab,
+    bar:{name:s.name+" "+flowW+"액",color:css("--s1"),values:s.ex.slice(st),yFmt:v=>krwBig(v)},
+    line:{name:flowW+"단가",color:css("--s2"),values:unitArr,yFmt:v=>unitFmt(v)},
+    height:230, xEvery:R>24?3:2
+  });
+  const exS=s.ex.slice(st).filter(v=>v!=null), pxS=c.px.slice(st).filter(v=>v!=null);
+  const exChg=exS.length>=2?ratio(exS[exS.length-1],exS[0]):null;
+  const pxChg=pxS.length>=2?ratio(pxS[pxS.length-1],pxS[0]):null;
+  document.querySelector("#corrSummary tbody").innerHTML=`
+    <tr><td>기간</td><td class="num">${MONTHS[st].label} ~ ${MONTHS[N-1].label}</td></tr>
+    <tr><td>${s.name} 수출 증감</td><td class="num ${cls(exChg)}">${pct(exChg)}</td></tr>
+    <tr><td>${c.name} 주가 등락</td><td class="num ${cls(pxChg)}">${pct(pxChg)}</td></tr>
+    <tr><td>본사</td><td class="num">${c.hq}</td></tr>
+    <tr><td>현재가</td><td class="num">${fmt0(c.last)}원</td></tr>`;
+}
+
+/* ───────────────────────── 탭 4 렌더 ───────────────────────── */
+let scrSort={k:"revYoY",dir:-1}, scrAll=false, scrSelected=null;
+document.querySelectorAll("#scrTable th.sortable").forEach(th=>th.addEventListener("click",()=>{
+  const k=th.dataset.k;
+  scrSort=scrSort.k===k?{k,dir:-scrSort.dir}:{k,dir:-1};
+  renderScreener();
+}));
+["fRev","fOpMin","fOpMax"].forEach(id=>document.getElementById(id).addEventListener("input",()=>{scrAll=false;renderScreener()}));
+document.getElementById("fReset").addEventListener("click",()=>{scrAll=!scrAll;renderScreener()});
+
+function renderScreener(){
+  document.getElementById("scrSub").textContent=`기준: ${SCREEN_LABEL} · 전년 동기 대비 · 매출 YoY 구간별(300%↑/200~300/100~200) 그룹 · 헤더 클릭 정렬 · 행 클릭 시 상세`;
+  const minRev=+document.getElementById("fRev").value||0;
+  const opMinRaw=document.getElementById("fOpMin").value, opMaxRaw=document.getElementById("fOpMax").value;
+  const opMin=opMinRaw===""?null:+opMinRaw, opMax=opMaxRaw===""?null:+opMaxRaw;
+  const passOp=c=>{
+    if(opMin==null&&opMax==null)return true;
+    if(c.opYoY==null)return false;
+    if(opMin!=null&&c.opYoY<opMin)return false;
+    if(opMax!=null&&c.opYoY>opMax)return false;
+    return true;
+  };
+  let list=SCREEN.filter(c=>scrAll||(c.revYoY!=null&&c.revYoY>=minRev&&passOp(c)));
+  list=[...list].sort((a,b)=>(((a[scrSort.k]==null?-1e18:a[scrSort.k]))-((b[scrSort.k]==null?-1e18:b[scrSort.k])))*scrSort.dir);
+  document.getElementById("fCount").textContent=(scrAll?"전체 ":"조건 충족 ")+list.length+"개 종목";
+  document.getElementById("fReset").classList.toggle("on",scrAll);
+  const bands=[
+    {t:"🚀 매출 YoY 300% 이상",f:c=>c.revYoY!=null&&c.revYoY>=300},
+    {t:"🔥 매출 YoY 200 ~ 300%",f:c=>c.revYoY!=null&&c.revYoY>=200&&c.revYoY<300},
+    {t:"📈 매출 YoY 100 ~ 200%",f:c=>c.revYoY!=null&&c.revYoY>=100&&c.revYoY<200},
+  ];
+  if(scrAll)bands.push({t:"기타 (100% 미만·미집계)",f:c=>c.revYoY==null||c.revYoY<100});
+  const row=c=>`
+    <tr class="rowlink" data-n="${c.name}">
+      <td><b>${c.name}</b></td><td>${c.mkt}</td><td>${c.ind&&c.ind!=="—"?c.ind:(c.code||"—")}</td><td>${c.hq}</td>
+      <td class="num">${fmt0(c.rev)}</td>
+      <td class="num ${cls(c.revYoY)}"><b>${pct(c.revYoY)}</b></td>
+      <td class="num">${fmt0(c.op)}</td>
+      <td class="num ${cls(c.opYoY)}"><b>${c.opYoY!=null?pct(c.opYoY):(c.op>0&&c.opPrev!=null&&c.opPrev<=0?"흑자전환":"—")}</b></td></tr>`;
+  let html="";
+  for(const b of bands){
+    const rows=list.filter(b.f);
+    if(!rows.length)continue;
+    html+=`<tr class="bandrow"><td colspan="8">${b.t} — ${rows.length}개</td></tr>`+rows.map(row).join("");
+  }
+  document.querySelector("#scrTable tbody").innerHTML=html
+    ||`<tr><td colspan="8" style="color:var(--ink-3);text-align:center;padding:24px">조건을 만족하는 종목이 없습니다 — 필터를 조정해 보세요</td></tr>`;
+  document.querySelectorAll("#scrTable tr.rowlink").forEach(r=>r.addEventListener("click",()=>{
+    scrSelected=SCREEN.find(x=>x.name===r.dataset.n); renderScrDetail();
+  }));
+  if(scrSelected)renderScrDetail();
+}
+function renderScrDetail(){
+  const c=scrSelected, box=document.getElementById("scrDetail");
+  box.style.display="block";
+  document.getElementById("scrDetName").textContent=c.name;
+  document.getElementById("scrDetSub").textContent=`${c.mkt}${c.ind&&c.ind!=="—"?" · "+c.ind:""}${c.code?" · "+c.code:""} · 본사 ${c.hq} — ${SCREEN_LABEL} 실적 비교`;
+  barChart(document.getElementById("scrDetChart"),{
+    labels:c.qs,
+    series:[
+      {name:"매출",color:css("--s1"),values:c.qRev},
+      {name:"영업이익",color:css("--s2"),values:c.qOp},
+    ],
+    yFmt:v=>fmt0(v)+"억", height:240
+  });
+}
+
+/* ───────────────────────── 초기 렌더 ───────────────────────── */
+/* ───────────────────────── 수출 증감 순위 ───────────────────────── */
+function goCorrFor(sid){
+  const s=SECTORS.find(x=>x.id===sid); if(!s)return;
+  const comp=COMPANIES.find(c=>(c.items||[]).includes(sid));
+  corrSel.sector.value=sid; fillCorrStocks();
+  if(comp)corrSel.stock.value=comp.code;
+  renderCorr(); gotoTab("corr");
+}
+function renderChange(){
+  const i=N-1;
+  const sum3=(arr,end)=>{if(end<2)return null;let t=0;for(let k=end-2;k<=end;k++){if(arr[k]==null)return null;t+=arr[k];}return t;};
+  const rows=SECTORS.map(s=>{
+    const q0=sum3(s.ex,i), q1=sum3(s.ex,i-3), y1=sum3(s.ex,i-12);
+    return {id:s.id,name:s.name,dir:s.dir,amt:q0,qoq:ratio(q0,q1),yoy:ratio(q0,y1)};
+  });
+  const fill=(elId,list,key,dir)=>{
+    const el=document.querySelector("#"+elId+" tbody");
+    if(!list.length){el.innerHTML=`<tr><td style="color:var(--ink-3);padding:12px">해당 품목 없음</td></tr>`;return;}
+    el.innerHTML=list.map((r,idx)=>`<tr data-id="${r.id}">
+      <td class="rk">${idx+1}</td>
+      <td><b>${r.name}</b>${r.dir==="im"?' <span style="color:var(--ink-3);font-size:11px">수입</span>':''}</td>
+      <td class="amt">${krwBig(r.amt)}</td>
+      <td class="chg ${cls(r[key])}">${pct(r[key])}</td></tr>`).join("");
+    el.querySelectorAll("tr[data-id]").forEach(tr=>tr.addEventListener("click",()=>goCorrFor(tr.dataset.id)));
+  };
+  const qoqValid=rows.filter(r=>r.qoq!=null), yoyValid=rows.filter(r=>r.yoy!=null);
+  fill("chgQoQup", qoqValid.filter(r=>r.qoq>0).sort((a,b)=>b.qoq-a.qoq), "qoq");
+  fill("chgQoQdn", qoqValid.filter(r=>r.qoq<0).sort((a,b)=>a.qoq-b.qoq), "qoq");
+  fill("chgYoYup", yoyValid.filter(r=>r.yoy>0).sort((a,b)=>b.yoy-a.yoy), "yoy");
+  fill("chgYoYdn", yoyValid.filter(r=>r.yoy<0).sort((a,b)=>a.yoy-b.yoy), "yoy");
+  document.getElementById("changeSub").textContent=`기준: ${MONTHS[i-2].label}~${MONTHS[i].label} 3개월 합계 · 전분기(직전 3개월)·전년동기 대비 · 품목 클릭 시 연동성 탭으로 이동`;
+}
+
+function renderAll(){renderTrade();renderStocks();renderCorr();renderChange();renderScreener()}
+renderAll();
+</script>
+</body>
+</html>
