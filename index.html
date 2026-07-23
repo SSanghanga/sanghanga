@@ -173,7 +173,7 @@ footer{max-width:1120px; margin:0 auto; padding:6px 20px 40px; color:var(--ink-3
     <h2 id="relTitle">관련 상장사 (본사·공장 소재지)</h2>
     <div class="sub">채널의 지역↔회사 연결에 대응합니다 — 각 종목의 본사/공장 위치를 함께 표시</div>
     <div class="tblwrap"><table id="relTable">
-      <thead><tr><th>종목명</th><th>코드</th><th>시장</th><th>본사·공장 소재지</th><th class="num">현재가(원)</th><th class="num">1년 수익률</th></tr></thead>
+      <thead><tr><th>종목명</th><th>코드</th><th>시장</th><th>공장 소재지</th><th class="num">소재지 품목 수출</th><th class="num">현재가(원)</th><th class="num">1년 수익률</th></tr></thead>
       <tbody></tbody>
     </table></div>
   </div>
@@ -187,9 +187,9 @@ footer{max-width:1120px; margin:0 auto; padding:6px 20px 40px; color:var(--ink-3
 
   <div class="panel">
     <h2 id="secSumTitle">전체 섹터 요약</h2>
-    <div class="sub">대분류별로 묶여 있습니다 · 행을 클릭하면 위 차트가 해당 품목으로 전환됩니다</div>
+    <div class="sub">전체 품목의 수출액·수입액·단가를 한눈에 · 대분류별로 묶여 있습니다 · 행을 클릭하면 위 차트·관련 상장사가 해당 품목으로 전환됩니다</div>
     <div class="tblwrap"><table id="sectorTable">
-      <thead><tr><th>품목</th><th class="num">금액(원화)</th><th class="num">YoY(작년比)</th><th class="num">재작년比</th></tr></thead>
+      <thead><tr><th>품목</th><th class="num">수출액</th><th class="num">수입액</th><th class="num">단가</th><th class="num">YoY(작년比)</th><th class="num">재작년比</th></tr></thead>
       <tbody></tbody>
     </table></div>
   </div>
@@ -360,7 +360,7 @@ const SECTOR_DEFS=[
  {id:"conmach",name:"건설기계",group:"기계",base:6,g:{2023:1,2024:1.02,2025:1.0,2026:1.05},sea:.05},
 ];
 let SECTORS;
-if(liveTrade){SECTORS=LIVE.sectors.map(s=>({id:s.id,name:s.name,group:s.group||"기타",dir:s.dir||"ex",ex:s.ex,wgt:s.wgt||null,countries:s.countries||[]}))}
+if(liveTrade){SECTORS=LIVE.sectors.map(s=>({id:s.id,name:s.name,group:s.group||"기타",dir:s.dir||"ex",ex:s.ex,imv:s.imv||null,wgt:s.wgt||null,countries:s.countries||[]}))}
 else{
   const rnd=mulberry32(20260722);
   SECTORS=SECTOR_DEFS.map(s=>{
@@ -768,12 +768,19 @@ function renderTrade(){
   const groups=[...new Set(SECTORS.map(x=>x.group))];
   let secHtml="";
   for(const g of groups){
-    secHtml+=`<tr class="bandrow"><td colspan="4">${g}</td></tr>`;
+    secHtml+=`<tr class="bandrow"><td colspan="6">${g}</td></tr>`;
     for(const x of SECTORS.filter(v=>v.group===g)){
       const y1=i>=12?ratio(x.ex[i],x.ex[i-12]):null, y2=i>=24?ratio(x.ex[i],x.ex[i-24]):null;
-      const tag=x.dir==="im"?' <span style="color:var(--ink-3);font-size:11px">수입</span>':'';
+      const isIm=x.dir==="im";
+      const tag=isIm?' <span style="color:var(--ink-3);font-size:11px">수입지표</span>':'';
+      const expV=isIm?(x.imv?x.imv[i]:null):x.ex[i];
+      const impV=isIm?x.ex[i]:(x.imv?x.imv[i]:null);
+      const up=(x.wgt&&x.wgt[i]!=null)?unitPrice(x.ex[i],x.wgt[i]):null;
       secHtml+=`<tr class="rowlink" data-id="${x.id}">
-        <td><b>${x.name}</b>${tag}</td><td class="num">${krwBig(x.ex[i])}</td>
+        <td><b>${x.name}</b>${tag}</td>
+        <td class="num">${krwBig(expV)}</td>
+        <td class="num" style="color:var(--ink-2)">${krwBig(impV)}</td>
+        <td class="num" style="color:var(--ink-2)">${unitFmt(up)}</td>
         <td class="num ${cls(y1)}">${pct(y1)}</td><td class="num ${cls(y2)}">${pct(y2)}</td></tr>`;
     }
   }
@@ -786,12 +793,14 @@ function renderRelStocks(s){
   const list=COMPANIES.filter(c=>(c.items||[]).includes(s.id));
   const tb=document.querySelector("#relTable tbody");
   document.getElementById("relTitle").textContent=`${s.name} 관련 상장사 (본사·공장 소재지)`;
-  if(!list.length){tb.innerHTML=`<tr><td colspan="6" style="color:var(--ink-3);text-align:center;padding:18px">연결된 상장사 정보가 없습니다</td></tr>`;return;}
+  if(!list.length){tb.innerHTML=`<tr><td colspan="7" style="color:var(--ink-3);text-align:center;padding:18px">연결된 상장사 정보가 없습니다</td></tr>`;return;}
   tb.innerHTML=list.map(c=>{
     const loc=c.fac?`<b style="color:var(--ink-1)">${c.fac}</b>`:(c.hq||"—");
     const sub=c.fac?`<div style="font-size:11px;color:var(--ink-3)">본사: ${c.hq||"—"}</div>`:"";
+    const re=c.regExp?`<b>${krwBig(c.regExp.krw)}</b><div style="font-size:11px;color:var(--ink-3)">${c.regExp.sido}·${c.regExp.item}·${c.regExp.ym}</div>`:'<span style="color:var(--ink-3)">—</span>';
     return `<tr class="rowlink" data-code="${c.code}">
     <td><b>${c.name}</b></td><td>${c.code}</td><td>${c.mkt||"—"}</td><td>${loc}${sub}</td>
+    <td class="num">${re}</td>
     <td class="num">${fmt0(c.last)}</td>
     <td class="num ${cls(c.y1)}">${pct(c.y1)}</td></tr>`;}).join("");
   tb.querySelectorAll("tr.rowlink").forEach(r=>r.addEventListener("click",()=>{
@@ -881,6 +890,7 @@ function renderCorr(){
     <tr><td>${s.name} 수출 증감</td><td class="num ${cls(exChg)}">${pct(exChg)}</td></tr>
     <tr><td>${c.name} 주가 등락</td><td class="num ${cls(pxChg)}">${pct(pxChg)}</td></tr>
     ${c.fac?`<tr><td>공장 소재지(채널)</td><td class="num"><b>${c.fac}</b></td></tr>`:""}
+    ${c.regExp?`<tr><td>소재지(${c.regExp.sido}) ${c.regExp.item} ${c.regExp.dir==="im"?"수입":"수출"}</td><td class="num"><b>${krwBig(c.regExp.krw)}</b> <span style="color:var(--ink-3);font-size:11px">${c.regExp.ym}</span></td></tr>`:""}
     <tr><td>본사(DART)</td><td class="num">${c.hq||"—"}</td></tr>
     <tr><td>현재가</td><td class="num">${fmt0(c.last)}원</td></tr>`;
 }
