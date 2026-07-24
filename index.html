@@ -235,13 +235,19 @@ footer{max-width:1120px; margin:0 auto; padding:6px 20px 40px; color:var(--ink-3
         <div class="sub" id="regSub"></div>
         <div class="grid2" style="margin-top:8px">
           <div>
-            <div class="sub" style="font-weight:600;color:var(--ink-2)" id="regNatLabel">전국 (연도별)</div>
+            <div class="sub" style="font-weight:600;color:var(--ink-2)" id="regNatLabel">전국</div>
             <div class="chartbox" id="regChartNat"></div>
           </div>
           <div>
-            <div class="sub" style="font-weight:600;color:var(--ink-2)" id="regLocLabel">소재지 (연도별)</div>
+            <div class="sub" style="font-weight:600;color:var(--ink-2)" id="regLocLabel">시군구별</div>
+            <div class="legend" id="regLocLegend"></div>
             <div class="chartbox" id="regChartLoc"></div>
           </div>
+        </div>
+        <div style="margin-top:12px">
+          <div class="sub" style="font-weight:600;color:var(--ink-2)" id="regRankLabel">시군구 수출 랭킹</div>
+          <div id="regRank"></div>
+          <div class="sub" id="regOwnNote" style="margin-top:6px"></div>
         </div>
       </div>
     </div>
@@ -815,7 +821,7 @@ function renderRelStocks(s){
   tb.innerHTML=list.map(c=>{
     const loc=c.fac?`<b style="color:var(--ink-1)">${c.fac}</b>`:(c.hq||"—");
     const sub=c.fac?`<div style="font-size:11px;color:var(--ink-3)">본사: ${c.hq||"—"}</div>`:"";
-    const re=c.reg?`<b>${krwBig(c.reg.latest)}</b><div style="font-size:11px;color:var(--ink-3)">${c.reg.sido}·${c.reg.item}·최근연도</div>`:'<span style="color:var(--ink-3)">—</span>';
+    const re=c.ownSgg?`<b>${c.ownSgg}</b><div style="font-size:11px;color:var(--ink-3)">소재 시군구</div>`:(c.fac?c.fac:'<span style="color:var(--ink-3)">—</span>');
     return `<tr class="rowlink" data-code="${c.code}">
     <td><b>${c.name}</b></td><td>${c.code}</td><td>${c.mkt||"—"}</td><td>${loc}${sub}</td>
     <td class="num">${re}</td>
@@ -883,35 +889,49 @@ function annualByYear(arr){
   const m={}; MONTHS.forEach((mo,i)=>{if(arr&&arr[i]!=null){m[mo.y]=(m[mo.y]||0)+arr[i];}});
   return m;
 }
-// 지역별 수출입 차트: 전국(연도별) vs 소재지(연도별)
+// 지역별 수출: 전국(월별) + 품목별 시군구 랭킹·월별 추이 (관세청 시군구별 실측)
+const REGCOLORS=["--s1","--s2","--s3","--s4","--up","--down"];
 function renderRegionCharts(s,c){
   const blk=document.getElementById("regBlock");
-  if(!c.reg){blk.style.display="none";return;}
+  const sgg=(LIVE.sgg&&c.sggKey)?LIVE.sgg[c.sggKey]:null;
+  if(!sgg){blk.style.display="none";return;}
   blk.style.display="";
-  const flow=s.dir==="im"?"수입":"수출";
-  document.getElementById("regTitle").textContent=`${c.name} · ${c.reg.item} — 지역별 ${flow}입`;
-  document.getElementById("regSub").innerHTML=`왼쪽: 전국 전체 · 오른쪽: <b>${c.reg.sido}</b>(이 종목 소재지) · 연도별 · 관세청 시도별 실측 · 단위 원화`;
-  const years=c.reg.years;
-  document.getElementById("regSub").innerHTML=`막대=수출액 · 선=수입액 · 연도별 · 왼쪽 전국 / 오른쪽 <b>${c.reg.sido}</b> 소재지 · 관세청 시도별 실측 · 원화<br><span style="color:var(--ink-3)">※ 지역별은 관세청 시도 API가 중량을 제공하지 않아 원/kg 단가는 위 월별 품목차트에만 있습니다.</span>`;
-  // 전국 연도별 (월별 데이터 합산): 수출 막대 + 수입 선
-  const natEx=annualByYear(s.ex), natIm=annualByYear(s.imv);
-  const natExV=years.map(y=>natEx[y]!=null?natEx[y]:null);
-  const natImV=years.map(y=>natIm[y]!=null?natIm[y]:null);
-  comboChart(document.getElementById("regChartNat"),{
-    labels:years,
-    bar:{name:"수출액",color:css("--s1"),values:natExV,yFmt:v=>krwBig(v)},
-    line:{name:"수입액",color:css("--s2"),values:natImV,yFmt:v=>krwBig(v)},
-    height:230, xEvery:1
+  const flow=sgg.dir==="im"?"수입":"수출";
+  const nMon=sgg.months.length;
+  document.getElementById("regTitle").textContent=`${sgg.item} — 지역별(시군구) ${flow}`;
+  document.getElementById("regSub").innerHTML=`이 품목이 실제로 어느 시군구에서 ${flow}되는지 (관세청 시군구별 실측·월별)<br><span style="color:var(--ink-3)">※ 통관 신고지 기준이라 회사 공장 위치와 다를 수 있습니다. 회사별 수출은 공개 API로 제공되지 않습니다.</span>`;
+  // 왼쪽: 전국 전체 (월별 라인, 최근 구간 = sgg.months 구간)
+  const natSlice=s.ex.slice(N-nMon);
+  lineChart(document.getElementById("regChartNat"),{
+    labels:sgg.months,
+    series:[{name:sgg.item+" 전국 "+flow,color:css("--s1"),values:natSlice,fmt:v=>krwBig(v)}],
+    yFmt:v=>krwBig(v), height:230, xEvery:3
   });
-  document.getElementById("regNatLabel").textContent=`전국 전체 — ${c.reg.item} (연도별)`;
-  // 소재지 연도별: 수출 막대 + 수입 선
-  comboChart(document.getElementById("regChartLoc"),{
-    labels:years,
-    bar:{name:"수출액",color:css("--s1"),values:c.reg.ex,yFmt:v=>krwBig(v)},
-    line:{name:"수입액",color:css("--s2"),values:c.reg.im,yFmt:v=>krwBig(v)},
-    height:230, xEvery:1
+  document.getElementById("regNatLabel").textContent=`전국 전체 — ${sgg.item} (월별)`;
+  // 오른쪽: 시군구별 월별 멀티라인 (상위 4)
+  const top=sgg.regs.slice(0,4);
+  const series=top.map((r,i)=>({name:r.name,color:css(REGCOLORS[i%REGCOLORS.length]),values:r.ex,fmt:v=>krwBig(v)}));
+  document.getElementById("regLocLegend").innerHTML=series.map(x=>`<span><i style="background:${x.color}"></i>${x.name}</span>`).join("");
+  lineChart(document.getElementById("regChartLoc"),{
+    labels:sgg.months, series, yFmt:v=>krwBig(v), height:230, xEvery:3
   });
-  document.getElementById("regLocLabel").innerHTML=`<b>${c.reg.sido}</b> 소재지 — ${c.reg.item} (연도별)`;
+  document.getElementById("regLocLabel").innerHTML=`<b>${sgg.sido}</b> 내 시군구별 — ${sgg.item} (월별)`;
+  // 랭킹 (전체 기간 합계)
+  document.getElementById("regRankLabel").textContent=`${sgg.sido} 시군구 ${flow} 랭킹 (2025~ 누적)`;
+  const mx=Math.max(...sgg.regs.map(r=>r.total),1);
+  document.getElementById("regRank").innerHTML=sgg.regs.map(r=>{
+    const own=(c.ownSgg&&r.name===c.ownSgg);
+    return `<div class="cbar">
+      <span class="nm">${r.name}${own?' <span style="color:var(--s1);font-weight:700">←이 종목</span>':''}</span>
+      <span class="track"><span class="fill" style="width:${(r.total/mx*100).toFixed(1)}%"></span></span>
+      <span class="val">${krwBig(r.total)}</span></div>`;
+  }).join("");
+  // 이 종목 소재 시군구가 랭킹에 없으면 안내
+  const inRank=sgg.regs.some(r=>r.name===c.ownSgg);
+  const own=document.getElementById("regOwnNote");
+  if(c.ownSgg&&!inRank)own.innerHTML=`ℹ️ <b>${c.name}</b> 소재지 <b>${c.ownSgg}</b>는 이 품목 ${flow} 실적이 없거나 미미합니다 (통관이 다른 지역에서 신고됨).`;
+  else if(c.ownSgg&&inRank)own.innerHTML=`✅ <b>${c.name}</b> 소재지 <b>${c.ownSgg}</b>가 위 랭킹에 있습니다.`;
+  else own.textContent="";
 }
 function renderCorr(){
   const s=SECTORS.find(x=>x.id===corrSel.sector.value)||SECTORS[0];
@@ -946,7 +966,7 @@ function renderCorr(){
     <tr><td>${s.name} 수출 증감</td><td class="num ${cls(exChg)}">${pct(exChg)}</td></tr>
     <tr><td>${c.name} 주가 등락</td><td class="num ${cls(pxChg)}">${pct(pxChg)}</td></tr>
     ${c.fac?`<tr><td>공장 소재지(채널)</td><td class="num"><b>${c.fac}</b></td></tr>`:""}
-    ${c.reg?`<tr><td>소재지(${c.reg.sido}) ${c.reg.item} ${c.reg.dir==="im"?"수입":"수출"}</td><td class="num"><b>${krwBig(c.reg.latest)}</b> <span style="color:var(--ink-3);font-size:11px">최근연도</span></td></tr>`:""}
+    ${c.ownSgg?`<tr><td>소재 시군구</td><td class="num"><b>${c.ownSgg}</b></td></tr>`:""}
     <tr><td>본사(DART)</td><td class="num">${c.hq||"—"}</td></tr>
     <tr><td>현재가</td><td class="num">${fmt0(c.last)}원</td></tr>`;
 }
