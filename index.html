@@ -892,21 +892,24 @@ function renderRegionCharts(s,c){
   document.getElementById("regTitle").textContent=`${c.name} · ${c.reg.item} — 지역별 ${flow}입`;
   document.getElementById("regSub").innerHTML=`왼쪽: 전국 전체 · 오른쪽: <b>${c.reg.sido}</b>(이 종목 소재지) · 연도별 · 관세청 시도별 실측 · 단위 원화`;
   const years=c.reg.years;
-  // 전국 연도별 (월별 데이터 합산)
+  document.getElementById("regSub").innerHTML=`막대=수출액 · 선=수입액 · 연도별 · 왼쪽 전국 / 오른쪽 <b>${c.reg.sido}</b> 소재지 · 관세청 시도별 실측 · 원화<br><span style="color:var(--ink-3)">※ 지역별은 관세청 시도 API가 중량을 제공하지 않아 원/kg 단가는 위 월별 품목차트에만 있습니다.</span>`;
+  // 전국 연도별 (월별 데이터 합산): 수출 막대 + 수입 선
   const natEx=annualByYear(s.ex), natIm=annualByYear(s.imv);
   const natExV=years.map(y=>natEx[y]!=null?natEx[y]:null);
   const natImV=years.map(y=>natIm[y]!=null?natIm[y]:null);
-  barChart(document.getElementById("regChartNat"),{
+  comboChart(document.getElementById("regChartNat"),{
     labels:years,
-    series:[{name:"수출",color:css("--s1"),values:natExV},{name:"수입",color:css("--s2"),values:natImV}],
-    yFmt:v=>krwBig(v), height:230
+    bar:{name:"수출액",color:css("--s1"),values:natExV,yFmt:v=>krwBig(v)},
+    line:{name:"수입액",color:css("--s2"),values:natImV,yFmt:v=>krwBig(v)},
+    height:230, xEvery:1
   });
   document.getElementById("regNatLabel").textContent=`전국 전체 — ${c.reg.item} (연도별)`;
-  // 소재지 연도별
-  barChart(document.getElementById("regChartLoc"),{
+  // 소재지 연도별: 수출 막대 + 수입 선
+  comboChart(document.getElementById("regChartLoc"),{
     labels:years,
-    series:[{name:"수출",color:css("--s1"),values:c.reg.ex},{name:"수입",color:css("--s2"),values:c.reg.im}],
-    yFmt:v=>krwBig(v), height:230
+    bar:{name:"수출액",color:css("--s1"),values:c.reg.ex,yFmt:v=>krwBig(v)},
+    line:{name:"수입액",color:css("--s2"),values:c.reg.im,yFmt:v=>krwBig(v)},
+    height:230, xEvery:1
   });
   document.getElementById("regLocLabel").innerHTML=`<b>${c.reg.sido}</b> 소재지 — ${c.reg.item} (연도별)`;
 }
