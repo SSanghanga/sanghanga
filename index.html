@@ -146,6 +146,7 @@ footer{max-width:1120px; margin:0 auto; padding:6px 20px 40px; color:var(--ink-3
     <button data-tab="corr">🔗 수출입-주가 연동성</button>
     <button data-tab="change">📊 수출 증감 순위</button>
     <button data-tab="screener">🚀 실적 급증 스크리너</button>
+    <button data-tab="nps">🏛️ 연기금 지분</button>
   </nav>
 </header>
 
@@ -299,6 +300,43 @@ footer{max-width:1120px; margin:0 auto; padding:6px 20px 40px; color:var(--ink-3
       <div class="sub" id="scrDetSub"></div>
       <div class="legend"><span><i style="background:var(--s1)"></i>매출(억원)</span><span><i style="background:var(--s2)"></i>영업이익(억원)</span></div>
       <div class="chartbox" id="scrDetChart"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 탭 · 연기금 지분 ══════════ -->
+<section class="tab" id="tab-nps">
+  <div class="panel">
+    <h2>국민연금(연기금) 지분공시</h2>
+    <div class="sub" id="npsSub">국민연금이 대량보유(5%) 보고한 종목 · 5% 확보 이후 주가 수익률 · 헤더 클릭 정렬 · 행 클릭 시 지분율 추이</div>
+    <div class="selrow">
+      <label class="f">정렬 <select id="npsSort">
+        <option value="ret12">확보후 1년 수익률순</option>
+        <option value="ret6">확보후 6개월 수익률순</option>
+        <option value="ratioNow">현재 지분율순</option>
+        <option value="date5">최근 확보순</option>
+      </select></label>
+      <label class="f"><input type="checkbox" id="npsOnlyUp"> 5%확보 완료(수익률 있는)만</label>
+      <span class="f" id="npsCount" style="color:var(--ink-3)"></span>
+    </div>
+    <div class="tblwrap"><table id="npsTable">
+      <thead><tr>
+        <th>종목명</th><th>코드</th>
+        <th class="num sortable" data-k="ratioNow">연기금 지분율 ⇅</th>
+        <th class="num sortable" data-k="date5">5% 확보일 ⇅</th>
+        <th class="num">매수기간 단가(추정)</th>
+        <th class="num">확보시 주가</th>
+        <th class="num sortable" data-k="ret6">확보후 6개월 ⇅</th>
+        <th class="num sortable" data-k="ret12">확보후 1년 ⇅</th>
+        <th class="num">현재가</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div id="npsDetail" style="display:none;margin-top:14px" class="detail">
+      <h2 id="npsDetName" style="margin-bottom:2px"></h2>
+      <div class="sub" id="npsDetSub"></div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>연기금 지분율(%)</span></div>
+      <div class="chartbox" id="npsDetChart"></div>
     </div>
   </div>
 </section>
@@ -1082,7 +1120,49 @@ function renderChange(){
   document.getElementById("changeSub").textContent=`기준: ${MONTHS[i-2].label}~${MONTHS[i].label} 3개월 합계 · 전분기(직전 3개월)·전년동기 대비 · 품목 클릭 시 연동성 탭으로 이동`;
 }
 
-function renderAll(){renderTrade();renderStocks();renderCorr();renderChange();renderScreener()}
+/* ───────────────────────── 연기금 지분 ───────────────────────── */
+let npsSort={k:"ret12",dir:-1}, npsSel=null;
+function renderNps(){
+  const NPS=LIVE.nps||[];
+  const box=document.getElementById("tab-nps");
+  if(!NPS.length){document.querySelector("#npsTable tbody").innerHTML=`<tr><td colspan="9" style="color:var(--ink-3);text-align:center;padding:24px">연기금 지분 데이터를 수집 중입니다 (매일 08시 갱신)</td></tr>`;return;}
+  document.getElementById("npsSub").textContent=`국민연금 대량보유(5%) 보고 종목 ${NPS.length}개 · 갱신 ${LIVE.npsUpdated||""} · 5% 확보 이후 주가 수익률 · 행 클릭 시 지분율 추이`;
+  const onlyUp=document.getElementById("npsOnlyUp").checked;
+  let list=NPS.filter(x=>!onlyUp||x.ret12!=null);
+  list=[...list].sort((a,b)=>{
+    const va=a[npsSort.k], vb=b[npsSort.k];
+    if(npsSort.k==="date5")return (va<vb?-1:va>vb?1:0)*npsSort.dir;
+    return (((va==null?-1e18:va))-((vb==null?-1e18:vb)))*npsSort.dir;
+  });
+  document.getElementById("npsCount").textContent=list.length+"개 종목";
+  document.querySelector("#npsTable tbody").innerHTML=list.map(x=>`
+    <tr class="rowlink" data-code="${x.code}">
+      <td><b>${x.name}</b></td><td>${x.code}</td>
+      <td class="num"><b>${x.ratioNow!=null?fmt(x.ratioNow,2)+"%":"—"}</b></td>
+      <td class="num">${x.date5||"—"}</td>
+      <td class="num">${x.avgBuy!=null?fmt0(x.avgBuy):"—"}</td>
+      <td class="num">${x.priceAt5!=null?fmt0(x.priceAt5):"—"}</td>
+      <td class="num ${cls(x.ret6)}">${x.ret6!=null?pct(x.ret6):"—"}</td>
+      <td class="num ${cls(x.ret12)}">${x.ret12!=null?pct(x.ret12):"—"}</td>
+      <td class="num">${x.priceNow!=null?fmt0(x.priceNow):"—"}</td></tr>`).join("");
+  document.querySelectorAll("#npsTable tr.rowlink").forEach(r=>r.addEventListener("click",()=>{npsSel=NPS.find(x=>x.code===r.dataset.code);renderNpsDetail();}));
+  if(npsSel)renderNpsDetail();
+}
+function renderNpsDetail(){
+  const x=npsSel; document.getElementById("npsDetail").style.display="block";
+  document.getElementById("npsDetName").textContent=`${x.name} (${x.code}) — 국민연금 지분율 추이`;
+  document.getElementById("npsDetSub").textContent=`5% 최초 확보: ${x.date5} · 현재 지분율 ${x.ratioNow}% · 확보후 6개월 ${x.ret6!=null?pct(x.ret6):"—"} / 1년 ${x.ret12!=null?pct(x.ret12):"—"}`;
+  lineChart(document.getElementById("npsDetChart"),{
+    labels:x.hist.map(h=>h.date.slice(2)),
+    series:[{name:"연기금 지분율",color:css("--s1"),values:x.hist.map(h=>h.ratio),fmt:v=>fmt(v,2)+"%"}],
+    yFmt:v=>fmt(v,1)+"%", xEvery:Math.max(1,Math.ceil(x.hist.length/8))
+  });
+}
+document.getElementById("npsSort").addEventListener("change",e=>{npsSort={k:e.target.value,dir:e.target.value==="date5"?-1:-1};renderNps();});
+document.getElementById("npsOnlyUp").addEventListener("change",renderNps);
+document.querySelectorAll("#npsTable th.sortable").forEach(th=>th.addEventListener("click",()=>{const k=th.dataset.k;npsSort=npsSort.k===k?{k,dir:-npsSort.dir}:{k,dir:-1};renderNps();}));
+
+function renderAll(){renderTrade();renderStocks();renderCorr();renderChange();renderScreener();renderNps()}
 renderAll();
 </script>
 </body>
