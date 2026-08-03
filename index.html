@@ -324,7 +324,7 @@ footer{max-width:1120px; margin:0 auto; padding:6px 20px 40px; color:var(--ink-3
       <label class="f"><input type="checkbox" id="npsOnlyUp"> 1년 수익률 있는 것만</label>
       <span class="f" id="npsCount" style="color:var(--ink-3)"></span>
     </div>
-    <div class="tblwrap"><table id="npsTable">
+    <div class="tblwrap" style="max-height:440px;overflow-y:auto"><table id="npsTable">
       <thead><tr>
         <th>종목명</th><th>코드</th>
         <th class="num sortable" data-k="ratioNow">연기금 지분율 ⇅</th>
@@ -607,7 +607,9 @@ if(liveScreen){
   SCREEN=LIVE.screener.rows.map(c=>({
     name:c.name,code:c.code,mkt:c.mkt||"—",ind:c.ind||"—",hq:c.hq||"—",
     rev:c.rev,revYoY:c.revYoY,op:c.op,opYoY:c.opYoY,opPrev:c.opP,
-    qs:["전년 동기","최근 분기"],qRev:[c.revP,c.rev],qOp:[c.opP==null?0:c.opP,c.op==null?0:c.op]
+    qs:(c.quarters&&c.quarters.length)?c.quarters.map(q=>q.label):["전년 동기","최근 분기"],
+    qRev:(c.quarters&&c.quarters.length)?c.quarters.map(q=>q.rev):[c.revP,c.rev],
+    qOp:(c.quarters&&c.quarters.length)?c.quarters.map(q=>q.op):[c.opP==null?0:c.opP,c.op==null?0:c.op]
   }));
 }else{
   SCREEN=SCREEN_DEFS;
@@ -1088,6 +1090,7 @@ function renderScreener(){
     ||`<tr><td colspan="8" style="color:var(--ink-3);text-align:center;padding:24px">조건을 만족하는 종목이 없습니다 — 필터를 조정해 보세요</td></tr>`;
   document.querySelectorAll("#scrTable tr.rowlink").forEach(r=>r.addEventListener("click",()=>{
     scrSelected=SCREEN.find(x=>x.name===r.dataset.n); renderScrDetail();
+    document.getElementById("scrDetail").scrollIntoView({behavior:"smooth",block:"start"});
   }));
   if(scrSelected)renderScrDetail();
 }
@@ -1166,7 +1169,10 @@ function renderNps(){
       <td class="num ${cls(x.ret6)}">${x.ret6!=null?pct(x.ret6):"—"}</td>
       <td class="num ${cls(x.ret12)}">${x.ret12!=null?pct(x.ret12):"—"}</td>
       <td class="num">${x.priceNow!=null?fmt0(x.priceNow):"—"}</td></tr>`).join("");
-  document.querySelectorAll("#npsTable tr.rowlink").forEach(r=>r.addEventListener("click",()=>{npsSel=NPS.find(x=>x.code===r.dataset.code);renderNpsDetail();}));
+  document.querySelectorAll("#npsTable tr.rowlink").forEach(r=>r.addEventListener("click",()=>{
+    npsSel=NPS.find(x=>x.code===r.dataset.code);renderNpsDetail();
+    document.getElementById("npsDetail").scrollIntoView({behavior:"smooth",block:"start"});
+  }));
   if(npsSel)renderNpsDetail();
 }
 function renderNpsDetail(){
