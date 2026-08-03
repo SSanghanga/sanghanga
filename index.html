@@ -316,7 +316,12 @@ footer{max-width:1120px; margin:0 auto; padding:6px 20px 40px; color:var(--ink-3
         <option value="ratioNow">현재 지분율순</option>
         <option value="date5">최근 확보순</option>
       </select></label>
-      <label class="f"><input type="checkbox" id="npsOnlyUp"> 5%확보 완료(수익률 있는)만</label>
+      <label class="f">상태 <select id="npsState">
+        <option value="all">전체</option>
+        <option value="holding">현재 5% 보유중</option>
+        <option value="exited">5% 이탈(공시 해제)</option>
+      </select></label>
+      <label class="f"><input type="checkbox" id="npsOnlyUp"> 1년 수익률 있는 것만</label>
       <span class="f" id="npsCount" style="color:var(--ink-3)"></span>
     </div>
     <div class="tblwrap"><table id="npsTable">
@@ -335,8 +340,23 @@ footer{max-width:1120px; margin:0 auto; padding:6px 20px 40px; color:var(--ink-3
     <div id="npsDetail" style="display:none;margin-top:14px" class="detail">
       <h2 id="npsDetName" style="margin-bottom:2px"></h2>
       <div class="sub" id="npsDetSub"></div>
-      <div class="legend"><span><i style="background:var(--s1)"></i>연기금 지분율(%)</span></div>
+
+      <h2 style="font-size:14px;margin:14px 0 4px">📌 보유 이력 (5% 진입 → 5% 이탈)</h2>
+      <div class="sub">연기금이 5% 지분신고를 한 시점부터, 다시 5% 밑으로 팔아 공시가 없어질 때까지의 수익률입니다</div>
+      <div class="tblwrap"><table id="npsEpTable">
+        <thead><tr><th>#</th><th>진입일</th><th>이탈일</th><th class="num">보유기간</th><th class="num">진입 지분</th><th class="num">최대 지분</th><th class="num">진입가</th><th class="num">이탈가</th><th class="num">구간 수익률</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+
+      <h2 style="font-size:14px;margin:16px 0 4px">📈 지분율 추이</h2>
+      <div class="legend"><span><i style="background:var(--s1)"></i>연기금 지분율(%)</span><span style="color:var(--ink-3)">점선 = 5% 기준</span></div>
       <div class="chartbox" id="npsDetChart"></div>
+
+      <h2 style="font-size:14px;margin:16px 0 4px">🗓️ 지분 공시 타임라인 (전체)</h2>
+      <div class="tblwrap" style="max-height:420px;overflow-y:auto"><table id="npsTlTable">
+        <thead><tr><th>보고일</th><th class="num">지분율</th><th class="num">변동</th><th class="num">보유주식수</th><th class="num">당시 주가</th><th>보고 사유</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
     </div>
   </div>
 </section>
@@ -1128,7 +1148,8 @@ function renderNps(){
   if(!NPS.length){document.querySelector("#npsTable tbody").innerHTML=`<tr><td colspan="9" style="color:var(--ink-3);text-align:center;padding:24px">연기금 지분 데이터를 수집 중입니다 (매일 08시 갱신)</td></tr>`;return;}
   document.getElementById("npsSub").textContent=`국민연금 대량보유(5%) 보고 종목 ${NPS.length}개 · 갱신 ${LIVE.npsUpdated||""} · 5% 확보 이후 주가 수익률 · 행 클릭 시 지분율 추이`;
   const onlyUp=document.getElementById("npsOnlyUp").checked;
-  let list=NPS.filter(x=>!onlyUp||x.ret12!=null);
+  const st=document.getElementById("npsState").value;
+  let list=NPS.filter(x=>(!onlyUp||x.ret12!=null)&&(st==="all"||(st==="holding"?x.holding:!x.holding)));
   list=[...list].sort((a,b)=>{
     const va=a[npsSort.k], vb=b[npsSort.k];
     if(npsSort.k==="date5")return (va<vb?-1:va>vb?1:0)*npsSort.dir;
@@ -1137,7 +1158,7 @@ function renderNps(){
   document.getElementById("npsCount").textContent=list.length+"개 종목";
   document.querySelector("#npsTable tbody").innerHTML=list.map(x=>`
     <tr class="rowlink" data-code="${x.code}">
-      <td><b>${x.name}</b></td><td>${x.code}</td>
+      <td><b>${x.name}</b> ${x.holding?'<span style="font-size:10.5px;color:var(--up);font-weight:700">보유중</span>':'<span style="font-size:10.5px;color:var(--ink-3)">해제</span>'}${(x.episodes&&x.episodes.length>1)?` <span style="font-size:10.5px;color:var(--ink-3)">이력${x.episodes.length}회</span>`:''}</td><td>${x.code}</td>
       <td class="num"><b>${x.ratioNow!=null?fmt(x.ratioNow,2)+"%":"—"}</b></td>
       <td class="num">${x.date5||"—"}</td>
       <td class="num">${x.avgBuy!=null?fmt0(x.avgBuy):"—"}</td>
@@ -1150,16 +1171,45 @@ function renderNps(){
 }
 function renderNpsDetail(){
   const x=npsSel; document.getElementById("npsDetail").style.display="block";
-  document.getElementById("npsDetName").textContent=`${x.name} (${x.code}) — 국민연금 지분율 추이`;
-  document.getElementById("npsDetSub").textContent=`5% 최초 확보: ${x.date5} · 현재 지분율 ${x.ratioNow}% · 확보후 6개월 ${x.ret6!=null?pct(x.ret6):"—"} / 1년 ${x.ret12!=null?pct(x.ret12):"—"}`;
+  const eps=x.episodes||[], tl=x.timeline||[];
+  document.getElementById("npsDetName").textContent=`${x.name} (${x.code}) — 연기금 지분 이력`;
+  const nDone=eps.filter(e=>!e.ongoing).length;
+  document.getElementById("npsDetSub").innerHTML=
+    `현재 지분율 <b>${x.ratioNow!=null?fmt(x.ratioNow,2)+"%":"—"}</b> · ${x.holding?'<b style="color:var(--up)">현재 5% 이상 보유중</b>':'<span style="color:var(--ink-3)">현재 5% 미만(공시 해제)</span>'} · 공시 ${tl.length}건 · 보유 이력 ${eps.length}회(종료 ${nDone}회)`;
+  // 보유 에피소드
+  const et=document.querySelector("#npsEpTable tbody");
+  et.innerHTML=eps.length?eps.map((e,i)=>`<tr${e.ongoing?' style="background:var(--chip)"':''}>
+      <td>${i+1}</td>
+      <td><b>${e.start}</b></td>
+      <td>${e.end?e.end:'<b style="color:var(--up)">보유중</b>'}</td>
+      <td class="num">${fmt(e.months,1)}개월</td>
+      <td class="num">${fmt(e.startRatio,2)}%</td>
+      <td class="num">${fmt(e.maxRatio,2)}%</td>
+      <td class="num">${e.startPrice!=null?fmt0(e.startPrice):"—"}</td>
+      <td class="num">${e.endPrice!=null?fmt0(e.endPrice):"—"}${e.ongoing?' <span style="color:var(--ink-3);font-size:11px">현재</span>':''}</td>
+      <td class="num ${cls(e.ret)}"><b>${e.ret!=null?pct(e.ret):"—"}</b></td></tr>`).join("")
+    :`<tr><td colspan="9" style="color:var(--ink-3);text-align:center;padding:14px">5% 이상 보유 구간이 없습니다</td></tr>`;
+  // 지분율 추이 (+5% 기준선)
   lineChart(document.getElementById("npsDetChart"),{
-    labels:x.hist.map(h=>h.date.slice(2)),
-    series:[{name:"연기금 지분율",color:css("--s1"),values:x.hist.map(h=>h.ratio),fmt:v=>fmt(v,2)+"%"}],
-    yFmt:v=>fmt(v,1)+"%", xEvery:Math.max(1,Math.ceil(x.hist.length/8))
+    labels:tl.map(h=>h.date.slice(2)),
+    series:[
+      {name:"연기금 지분율",color:css("--s1"),values:tl.map(h=>h.ratio),fmt:v=>fmt(v,2)+"%"},
+      {name:"5% 기준",color:css("--ink-3"),values:tl.map(()=>5),fmt:v=>"5%"}
+    ],
+    yFmt:v=>fmt(v,1)+"%", xEvery:Math.max(1,Math.ceil(tl.length/8))
   });
+  // 타임라인 (최신순)
+  document.querySelector("#npsTlTable tbody").innerHTML=[...tl].reverse().map(h=>`<tr>
+      <td>${h.date}</td>
+      <td class="num"><b>${fmt(h.ratio,2)}%</b></td>
+      <td class="num ${cls(h.chg)}">${h.chg!=null&&h.chg!==0?pct(h.chg):"—"}</td>
+      <td class="num">${h.qty!=null?fmt0(h.qty):"—"}</td>
+      <td class="num">${h.price!=null?fmt0(h.price):"—"}</td>
+      <td style="font-size:11.5px;color:var(--ink-3)">${h.resn||""}</td></tr>`).join("");
 }
 document.getElementById("npsSort").addEventListener("change",e=>{npsSort={k:e.target.value,dir:e.target.value==="date5"?-1:-1};renderNps();});
 document.getElementById("npsOnlyUp").addEventListener("change",renderNps);
+document.getElementById("npsState").addEventListener("change",renderNps);
 document.querySelectorAll("#npsTable th.sortable").forEach(th=>th.addEventListener("click",()=>{const k=th.dataset.k;npsSort=npsSort.k===k?{k,dir:-npsSort.dir}:{k,dir:-1};renderNps();}));
 
 function renderAll(){renderTrade();renderStocks();renderCorr();renderChange();renderScreener();renderNps()}
