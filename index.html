@@ -1069,32 +1069,39 @@ document.querySelectorAll("#scrTable th.sortable").forEach(th=>th.addEventListen
   scrSort=scrSort.k===k?{k,dir:-scrSort.dir}:{k,dir:-1};
   renderScreener();
 }));
-// 매출/영업이익 4구간 필터
-let fRevMin=20, fOpMin=null;
+// 매출/영업이익 구간 필터 (겹치지 않는 4구간)
+const YBANDS=[
+  {k:"20",t:"20~30%",lo:20,hi:30},
+  {k:"30",t:"30~50%",lo:30,hi:50},
+  {k:"50",t:"50~100%",lo:50,hi:100},
+  {k:"100",t:"100%↑",lo:100,hi:Infinity},
+];
+let fRevBand=null, fOpBand=null;
+const inBand=(v,b)=>b==null?true:(v!=null&&v>=b.lo&&v<b.hi);
 function buildScrChips(){
   const mk=(el,cur,cb)=>{
-    el.innerHTML=[20,30,50,100].map(v=>`<button class="chip ${cur===v?"on":""}" data-v="${v}">${v}%↑</button>`).join("")
-      +`<button class="chip ${cur==null?"on":""}" data-v="">제한없음</button>`;
-    el.querySelectorAll(".chip").forEach(b=>b.addEventListener("click",()=>{cb(b.dataset.v===""?null:+b.dataset.v);}));
+    el.innerHTML=YBANDS.map(b=>`<button class="chip ${cur&&cur.k===b.k?"on":""}" data-k="${b.k}">${b.t}</button>`).join("")
+      +`<button class="chip ${cur==null?"on":""}" data-k="">전체</button>`;
+    el.querySelectorAll(".chip").forEach(x=>x.addEventListener("click",()=>{cb(x.dataset.k===""?null:YBANDS.find(b=>b.k===x.dataset.k));}));
   };
-  mk(document.getElementById("fRevChips"),fRevMin,v=>{fRevMin=v;renderScreener();});
-  mk(document.getElementById("fOpChips"),fOpMin,v=>{fOpMin=v;renderScreener();});
+  mk(document.getElementById("fRevChips"),fRevBand,v=>{fRevBand=v;renderScreener();});
+  mk(document.getElementById("fOpChips"),fOpBand,v=>{fOpBand=v;renderScreener();});
 }
 
 function renderScreener(){
   buildScrChips();
-  document.getElementById("scrSub").innerHTML=`기준 <b>${SCREEN_LABEL}</b> (분기보고서 확정 기준) · 전년 동기 대비 · 구간별 그룹 · 헤더 클릭 정렬 · <b>행 클릭 시 분기실적·목표가·임원매수·뉴스</b>`;
-  const passOp=c=>fOpMin==null||(c.opYoY!=null&&c.opYoY>=fOpMin);
-  const passRev=c=>fRevMin==null||(c.revYoY!=null&&c.revYoY>=fRevMin);
+  document.getElementById("scrSub").innerHTML=`기준 <b>${SCREEN_LABEL}</b> (분기보고서 확정 기준) · 전년 동기 대비 · <b>구간은 서로 겹치지 않습니다</b> (20~30 / 30~50 / 50~100 / 100↑) · 헤더 클릭 정렬 · <b>행 클릭 시 분기실적·목표가·임원매수·뉴스</b>`;
+  const passOp=c=>inBand(c.opYoY,fOpBand);
+  const passRev=c=>inBand(c.revYoY,fRevBand);
   let list=SCREEN.filter(c=>passRev(c)&&passOp(c));
   list=[...list].sort((a,b)=>(((a[scrSort.k]==null?-1e18:a[scrSort.k]))-((b[scrSort.k]==null?-1e18:b[scrSort.k])))*scrSort.dir);
   document.getElementById("fCount").textContent=`조건 충족 ${list.length}개 종목 (전체 ${SCREEN.length})`;
   const bands=[
     {t:"🚀 매출 YoY 100% 이상",f:c=>c.revYoY!=null&&c.revYoY>=100},
-    {t:"🔥 매출 YoY 50 ~ 100%",f:c=>c.revYoY!=null&&c.revYoY>=50&&c.revYoY<100},
-    {t:"📈 매출 YoY 30 ~ 50%",f:c=>c.revYoY!=null&&c.revYoY>=30&&c.revYoY<50},
-    {t:"📊 매출 YoY 20 ~ 30%",f:c=>c.revYoY!=null&&c.revYoY>=20&&c.revYoY<30},
-    {t:"기타",f:c=>c.revYoY==null||c.revYoY<20},
+    {t:"🔥 매출 YoY 50 ~ 100% 미만",f:c=>c.revYoY!=null&&c.revYoY>=50&&c.revYoY<100},
+    {t:"📈 매출 YoY 30 ~ 50% 미만",f:c=>c.revYoY!=null&&c.revYoY>=30&&c.revYoY<50},
+    {t:"📊 매출 YoY 20 ~ 30% 미만",f:c=>c.revYoY!=null&&c.revYoY>=20&&c.revYoY<30},
+    {t:"기타 (20% 미만·미집계)",f:c=>c.revYoY==null||c.revYoY<20},
   ];
   const row=c=>`
     <tr class="rowlink" data-n="${c.name}">
