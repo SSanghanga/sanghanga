@@ -280,12 +280,13 @@ footer{max-width:1120px; margin:0 auto; padding:6px 20px 40px; color:var(--ink-3
     <h2>분기 실적 급증 스크리너</h2>
     <div class="sub" id="scrSub">최근 분기 실적이 전년 동기 대비 급증한 종목을 걸러냅니다 · 헤더 클릭으로 정렬 · 행 클릭 시 상세 표시</div>
     <div class="selrow">
-      <label class="f">매출 YoY ≥ <input type="number" id="fRev" value="100" step="50"> %</label>
-      <label class="f">영업이익 YoY <input type="number" id="fOpMin" placeholder="제한없음" step="50"> ~ <input type="number" id="fOpMax" placeholder="제한없음" step="50"> %</label>
-      <button class="chip" id="fReset">조건 해제 (전체 보기)</button>
+      <span class="f" style="font-weight:700">매출 YoY</span>
+      <div class="chips" id="fRevChips" style="margin:0"></div>
+      <span class="f" style="font-weight:700;margin-left:10px">영업이익 YoY</span>
+      <div class="chips" id="fOpChips" style="margin:0"></div>
       <span class="f" id="fCount" style="color:var(--ink-3)"></span>
     </div>
-    <div class="tblwrap"><table id="scrTable">
+    <div class="tblwrap" style="max-height:460px;overflow-y:auto"><table id="scrTable">
       <thead><tr>
         <th>종목명</th><th>시장</th><th>업종</th><th>본사</th>
         <th class="num sortable" data-k="rev">매출(억원) ⇅</th>
@@ -298,8 +299,25 @@ footer{max-width:1120px; margin:0 auto; padding:6px 20px 40px; color:var(--ink-3
     <div id="scrDetail" style="display:none; margin-top:16px" class="detail">
       <h2 id="scrDetName" style="margin-bottom:2px"></h2>
       <div class="sub" id="scrDetSub"></div>
-      <div class="legend"><span><i style="background:var(--s1)"></i>매출(억원)</span><span><i style="background:var(--s2)"></i>영업이익(억원)</span></div>
+      <div id="scrConsensus" style="margin:10px 0"></div>
+
+      <h2 style="font-size:14px;margin:14px 0 4px">📊 연간 · 분기 실적 (YoY / QoQ)</h2>
+      <div class="tblwrap"><table id="scrQTable">
+        <thead><tr><th>기간</th><th class="num">매출(억원)</th><th class="num">매출 YoY</th><th class="num">매출 QoQ</th><th class="num">영업이익(억원)</th><th class="num">영업이익 YoY</th><th class="num">영업이익 QoQ</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+
+      <div class="legend" style="margin-top:12px"><span><i style="background:var(--s1)"></i>매출(억원)</span><span><i style="background:var(--s2)"></i>영업이익(억원)</span></div>
       <div class="chartbox" id="scrDetChart"></div>
+
+      <h2 style="font-size:14px;margin:16px 0 4px">👤 대주주·임원 매수 (최근 1년)</h2>
+      <div class="tblwrap" id="scrInsiderWrap"><table id="scrInsiderTable">
+        <thead><tr><th>보고일</th><th>보고자</th><th>직위</th><th>구분</th><th class="num">증가 주식수</th><th class="num">보유 주식수</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+
+      <h2 style="font-size:14px;margin:16px 0 4px">📰 최근 뉴스 (성장 배경)</h2>
+      <div id="scrNews"></div>
     </div>
   </div>
 </section>
@@ -605,8 +623,11 @@ let SCREEN, SCREEN_LABEL="2026년 1분기 (샘플)";
 if(liveScreen){
   SCREEN_LABEL=LIVE.screener.quarter;
   SCREEN=LIVE.screener.rows.map(c=>({
-    name:c.name,code:c.code,mkt:c.mkt||"—",ind:c.ind||"—",hq:c.hq||"—",
-    rev:c.rev,revYoY:c.revYoY,op:c.op,opYoY:c.opYoY,opPrev:c.opP,
+    name:c.name,code:c.code,mkt:c.mkt||"—",ind:c.induty||c.ind||"—",hq:c.hq||"—",
+    rev:c.rev,revYoY:c.revYoY,op:c.op,opYoY:c.opYoY,opPrev:c.opP,revPrev:c.revP,
+    quarters:c.quarters||null, annual:c.annual||null, news:c.news||null,
+    insiderBuys:c.insiderBuys||null, targetPrice:c.targetPrice||null, recomm:c.recomm||null,
+    consDate:c.consDate||null, price:c.price||null,
     qs:(c.quarters&&c.quarters.length)?c.quarters.map(q=>q.label):["전년 동기","최근 분기"],
     qRev:(c.quarters&&c.quarters.length)?c.quarters.map(q=>q.rev):[c.revP,c.rev],
     qOp:(c.quarters&&c.quarters.length)?c.quarters.map(q=>q.op):[c.opP==null?0:c.opP,c.op==null?0:c.op]
@@ -1048,31 +1069,33 @@ document.querySelectorAll("#scrTable th.sortable").forEach(th=>th.addEventListen
   scrSort=scrSort.k===k?{k,dir:-scrSort.dir}:{k,dir:-1};
   renderScreener();
 }));
-["fRev","fOpMin","fOpMax"].forEach(id=>document.getElementById(id).addEventListener("input",()=>{scrAll=false;renderScreener()}));
-document.getElementById("fReset").addEventListener("click",()=>{scrAll=!scrAll;renderScreener()});
+// 매출/영업이익 4구간 필터
+let fRevMin=20, fOpMin=null;
+function buildScrChips(){
+  const mk=(el,cur,cb)=>{
+    el.innerHTML=[20,30,50,100].map(v=>`<button class="chip ${cur===v?"on":""}" data-v="${v}">${v}%↑</button>`).join("")
+      +`<button class="chip ${cur==null?"on":""}" data-v="">제한없음</button>`;
+    el.querySelectorAll(".chip").forEach(b=>b.addEventListener("click",()=>{cb(b.dataset.v===""?null:+b.dataset.v);}));
+  };
+  mk(document.getElementById("fRevChips"),fRevMin,v=>{fRevMin=v;renderScreener();});
+  mk(document.getElementById("fOpChips"),fOpMin,v=>{fOpMin=v;renderScreener();});
+}
 
 function renderScreener(){
-  document.getElementById("scrSub").textContent=`기준: ${SCREEN_LABEL} · 전년 동기 대비 · 매출 YoY 구간별(300%↑/200~300/100~200) 그룹 · 헤더 클릭 정렬 · 행 클릭 시 상세`;
-  const minRev=+document.getElementById("fRev").value||0;
-  const opMinRaw=document.getElementById("fOpMin").value, opMaxRaw=document.getElementById("fOpMax").value;
-  const opMin=opMinRaw===""?null:+opMinRaw, opMax=opMaxRaw===""?null:+opMaxRaw;
-  const passOp=c=>{
-    if(opMin==null&&opMax==null)return true;
-    if(c.opYoY==null)return false;
-    if(opMin!=null&&c.opYoY<opMin)return false;
-    if(opMax!=null&&c.opYoY>opMax)return false;
-    return true;
-  };
-  let list=SCREEN.filter(c=>scrAll||(c.revYoY!=null&&c.revYoY>=minRev&&passOp(c)));
+  buildScrChips();
+  document.getElementById("scrSub").innerHTML=`기준 <b>${SCREEN_LABEL}</b> (분기보고서 확정 기준) · 전년 동기 대비 · 구간별 그룹 · 헤더 클릭 정렬 · <b>행 클릭 시 분기실적·목표가·임원매수·뉴스</b>`;
+  const passOp=c=>fOpMin==null||(c.opYoY!=null&&c.opYoY>=fOpMin);
+  const passRev=c=>fRevMin==null||(c.revYoY!=null&&c.revYoY>=fRevMin);
+  let list=SCREEN.filter(c=>passRev(c)&&passOp(c));
   list=[...list].sort((a,b)=>(((a[scrSort.k]==null?-1e18:a[scrSort.k]))-((b[scrSort.k]==null?-1e18:b[scrSort.k])))*scrSort.dir);
-  document.getElementById("fCount").textContent=(scrAll?"전체 ":"조건 충족 ")+list.length+"개 종목";
-  document.getElementById("fReset").classList.toggle("on",scrAll);
+  document.getElementById("fCount").textContent=`조건 충족 ${list.length}개 종목 (전체 ${SCREEN.length})`;
   const bands=[
-    {t:"🚀 매출 YoY 300% 이상",f:c=>c.revYoY!=null&&c.revYoY>=300},
-    {t:"🔥 매출 YoY 200 ~ 300%",f:c=>c.revYoY!=null&&c.revYoY>=200&&c.revYoY<300},
-    {t:"📈 매출 YoY 100 ~ 200%",f:c=>c.revYoY!=null&&c.revYoY>=100&&c.revYoY<200},
+    {t:"🚀 매출 YoY 100% 이상",f:c=>c.revYoY!=null&&c.revYoY>=100},
+    {t:"🔥 매출 YoY 50 ~ 100%",f:c=>c.revYoY!=null&&c.revYoY>=50&&c.revYoY<100},
+    {t:"📈 매출 YoY 30 ~ 50%",f:c=>c.revYoY!=null&&c.revYoY>=30&&c.revYoY<50},
+    {t:"📊 매출 YoY 20 ~ 30%",f:c=>c.revYoY!=null&&c.revYoY>=20&&c.revYoY<30},
+    {t:"기타",f:c=>c.revYoY==null||c.revYoY<20},
   ];
-  if(scrAll)bands.push({t:"기타 (100% 미만·미집계)",f:c=>c.revYoY==null||c.revYoY<100});
   const row=c=>`
     <tr class="rowlink" data-n="${c.name}">
       <td><b>${c.name}</b></td><td>${c.mkt}</td><td>${c.ind&&c.ind!=="—"?c.ind:(c.code||"—")}</td><td>${c.hq}</td>
@@ -1097,16 +1120,59 @@ function renderScreener(){
 function renderScrDetail(){
   const c=scrSelected, box=document.getElementById("scrDetail");
   box.style.display="block";
-  document.getElementById("scrDetName").textContent=c.name;
-  document.getElementById("scrDetSub").textContent=`${c.mkt}${c.ind&&c.ind!=="—"?" · "+c.ind:""}${c.code?" · "+c.code:""} · 본사 ${c.hq} — ${SCREEN_LABEL} 실적 비교`;
+  document.getElementById("scrDetName").textContent=`${c.name} (${c.code||"—"})`;
+  document.getElementById("scrDetSub").innerHTML=`${c.mkt} · <b>${c.ind}</b> · 본사 ${c.hq}`;
+  // 컨센서스 (목표주가/투자의견)
+  const cons=document.getElementById("scrConsensus");
+  if(c.targetPrice){
+    const tp=+String(c.targetPrice).replace(/,/g,""), pr=c.price?+String(c.price).replace(/,/g,""):null;
+    const up=(tp&&pr)?((tp/pr-1)*100):null;
+    const rc=c.recomm?+c.recomm:null;
+    const rcTxt=rc==null?"":(rc>=4?"매수 우위":rc>=3?"중립~매수":"중립");
+    cons.innerHTML=`<div class="cards" style="margin:0">
+      <div class="card"><div class="k">증권사 목표주가 (컨센서스)</div><div class="v">${fmt0(tp)}원</div><div class="d ${cls(up)}">${up!=null?"현재가 대비 "+pct(up):""}</div></div>
+      <div class="card"><div class="k">현재가</div><div class="v">${pr!=null?fmt0(pr)+"원":"—"}</div><div class="d">${c.consDate?c.consDate+" 기준":""}</div></div>
+      <div class="card"><div class="k">투자의견 (5점 만점)</div><div class="v">${c.recomm||"—"}</div><div class="d">${rcTxt}</div></div>
+    </div>`;
+  } else cons.innerHTML=`<div class="sub">증권사 컨센서스(목표주가) 정보가 없는 종목입니다</div>`;
+  // 연간 + 분기 표
+  const qt=document.querySelector("#scrQTable tbody");
+  let rowsHtml="";
+  if(c.annual&&c.annual.length){
+    for(const a of c.annual){
+      rowsHtml+=`<tr class="bandrow"><td><b>${a.label}</b></td>
+        <td class="num"><b>${fmt0(a.rev)}</b></td><td class="num ${cls(a.revYoY)}">${a.revYoY!=null?pct(a.revYoY):"—"}</td><td class="num">—</td>
+        <td class="num"><b>${a.op!=null?fmt0(a.op):"—"}</b></td><td class="num ${cls(a.opYoY)}">${a.opYoY!=null?pct(a.opYoY):"—"}</td><td class="num">—</td></tr>`;
+    }
+  }
+  if(c.quarters&&c.quarters.length){
+    for(const q of c.quarters){
+      rowsHtml+=`<tr><td>${q.label}</td>
+        <td class="num">${fmt0(q.rev)}</td><td class="num ${cls(q.revYoY)}">${q.revYoY!=null?pct(q.revYoY):"—"}</td><td class="num ${cls(q.revQoQ)}">${q.revQoQ!=null?pct(q.revQoQ):"—"}</td>
+        <td class="num">${q.op!=null?fmt0(q.op):"—"}</td><td class="num ${cls(q.opYoY)}">${q.opYoY!=null?pct(q.opYoY):"—"}</td><td class="num ${cls(q.opQoQ)}">${q.opQoQ!=null?pct(q.opQoQ):"—"}</td></tr>`;
+    }
+  }
+  qt.innerHTML=rowsHtml||`<tr><td colspan="7" style="color:var(--ink-3);text-align:center;padding:14px">분기 상세는 매출 YoY 20% 이상 상위 종목만 수집합니다</td></tr>`;
+  // 차트
   barChart(document.getElementById("scrDetChart"),{
     labels:c.qs,
-    series:[
-      {name:"매출",color:css("--s1"),values:c.qRev},
-      {name:"영업이익",color:css("--s2"),values:c.qOp},
-    ],
+    series:[{name:"매출",color:css("--s1"),values:c.qRev},{name:"영업이익",color:css("--s2"),values:c.qOp}],
     yFmt:v=>fmt0(v)+"억", height:240
   });
+  // 임원·대주주 매수
+  const it=document.querySelector("#scrInsiderTable tbody");
+  it.innerHTML=(c.insiderBuys&&c.insiderBuys.length)
+    ? c.insiderBuys.map(b=>`<tr><td>${b.date}</td><td><b>${b.who}</b></td><td>${b.pos||"—"}</td><td>${b.main&&b.main!=="-"?b.main:(b.reg||"—")}</td>
+        <td class="num" style="color:var(--up);font-weight:700">+${fmt0(b.inc)}</td><td class="num">${fmt0(b.total)}</td></tr>`).join("")
+    : `<tr><td colspan="6" style="color:var(--ink-3);text-align:center;padding:12px">최근 1년 내 대주주·임원 매수(증가) 보고가 없습니다</td></tr>`;
+  // 뉴스
+  const nw=document.getElementById("scrNews");
+  nw.innerHTML=(c.news&&c.news.length)
+    ? c.news.map(n=>{const d=n.dt&&n.dt.length>=8?`${n.dt.slice(0,4)}-${n.dt.slice(4,6)}-${n.dt.slice(6,8)}`:"";
+        return `<div style="padding:7px 0;border-bottom:1px solid var(--grid)">
+          <a href="${n.url}" target="_blank" rel="noopener" style="color:var(--s1);text-decoration:none;font-weight:600">${n.title}</a>
+          <div style="font-size:11.5px;color:var(--ink-3)">${n.office||""} ${d}</div></div>`;}).join("")
+    : `<div class="sub">최근 뉴스 정보가 없습니다</div>`;
 }
 
 /* ───────────────────────── 초기 렌더 ───────────────────────── */
